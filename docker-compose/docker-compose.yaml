@@ -1,0 +1,112 @@
+version: '3.9'
+services:
+  msa-redis-service:
+    container_name: msa_redis_container
+    image: redis:alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --loglevel warning
+    volumes:
+      - ../docker-volumes/cache:/data
+
+  msa-mongodb-service:
+    container_name: msa_mongodb_container
+    image: mongo:7.0.2
+    restart: always
+    ports:
+      - 27018:27017
+    volumes:
+      - ../docker-volumes/data:/data/db
+
+  msa-mysql-service:
+    container_name: msa_mysql_container
+    image: mysql:9
+    # command: ["mysqld", "--mysql-native-password=ON"]
+    restart: always
+    environment:
+      - MYSQL_USER=labadmin
+      - MYSQL_DATABASE=msa_auth
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_PASSWORD=root123
+    ports:
+      - '3306:3306'
+    volumes:
+      - ../docker-volumes/mysql:/var/lib/mysql
+
+  msa-postgres-service:
+    container_name: msa_postgres_container
+    image: postgres:16.3
+    restart: always
+    environment:
+      - POSTGRES_USER=labadmin
+      - POSTGRES_PASSWORD=root123
+      - POSTGRES_DB=msa_reviews
+    ports:
+      - '5432:5432'
+    volumes:
+      - ../docker-volumes/postgres:/var/lib/postgresql
+
+  msa-rabbitmq-service:
+    container_name: msa_rabbitmq_container
+    image: rabbitmq:3.13-rc-management-alpine
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=labadmin
+      - RABBITMQ_DEFAULT_PASS=root123
+    ports:
+      # AMQP protocol port
+      - '5672:5672'
+      # Management UI, RabbitMQ Dashboard
+      - '15672:15672'
+    networks:
+      - es-network
+
+  msa-elasticsearch-service:
+    container_name: msa_elasticsearch_container
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.4
+    restart: always
+    environment:
+      - ES_JAVA_OPTS=-Xmx1g -Xms1g
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.authc.api_key.enabled=true
+      - xpack.monitoring.collection.enabled=true
+      - xpack.security.enrollment.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9300:9300
+      - 9200:9200
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+      # - ../docker-volumes/esdata:/usr/share/elasticsearch/data
+    networks:
+      - es-network
+
+  msa-kibana-service:
+    container_name: msa_kibana_container
+    image: docker.elastic.co/kibana/kibana:8.10.4
+    restart: always
+    environment:
+      - ELASTICSEARCH_HOSTS=["http://msa_elasticsearch_container:9200"]
+    ports:
+      - 5601:5601
+    networks:
+      - es-network
+    volumes:
+      - ../configurations/kibana.yml/:/usr/share/kibana/config/kibana.yml:ro
+    depends_on: 
+      - msa-elasticsearch-service
+
+volumes:
+  esdata:
+    driver: local
+      
+networks:
+  es-network:
+    name: es-network
+    driver: bridge

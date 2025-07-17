@@ -1,0 +1,4 @@
+# Docker Volumes Ignore
+docker-volumes/
+.DS_Store
+server/.DS_Store
