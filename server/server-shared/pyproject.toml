@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "server-shared"
+version = "0.1.0"
+description = "Reusable shared server-side utilities including logging, middleware, and cloudinary integration."
+authors = ["subhamsahu <sam766626@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+cloudinary = "^1.44.1"
+elasticsearch = "^8.10.1"
+fastapi = "^0.116.1"
+pyjwt = "^2.10.1"
+secure = "^1.0.1"
+slowapi = "^0.1.9"
+
+
+[tool.poetry.group.dev.dependencies]
+pyfiglet = "^1.0.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
