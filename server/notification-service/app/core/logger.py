@@ -18,12 +18,12 @@ class AppLogger(Logger, metaclass=Singleton):
     def __init__(self):
         with self._init_lock:
             if not hasattr(self, "_initialized"):
-                es_url = app_config.ELASTICSEARCH_URL if app_config.ENABLE_ES_LOGGING else None
+                es_url = app_config.ELASTICSEARCH_URL if app_config.ENABLE_ES else None
                 super().__init__(
                     es_url=es_url,
                     service_name=SERVICE_NAME,
                     log_level="INFO"
                 )
                 self._initialized = True
-                self.info(f"Logger initialized for service: {SERVICE_NAME}, Enabled ES Logging: {app_config.ENABLE_ES_LOGGING}")
+                self.info(f"Logger initialized for service: {SERVICE_NAME}, Enabled ES Logging: {app_config.ENABLE_ES}")
 logger = AppLogger()

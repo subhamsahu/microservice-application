@@ -39,7 +39,7 @@ class ApplicationSettings(BaseSettings):
     DOMAIN: str
 
     # Elasticsearch configuration
-    ENABLE_ES_LOGGING: int = 0
+    ENABLE_ES: int = 0
     ELASTICSEARCH_URL: str = "http://elasticsearch.example.com"
 
     FIRST_SUPERUSER: str = "admin"

@@ -178,8 +178,10 @@ class Server(metaclass=Singleton):
             raise DatabaseInitializeError(
                 "Failed to initialize database connection.") from error
         # Uncomment if using Elasticsearch
-
-        self.elastic_service.check_connection()
+        if self.config.ENABLE_ES:
+            self.logger.info("Checking Elasticsearch connection...")
+            self.elastic_service.check_connection()
+            self.logger.info("Elasticsearch connection is healthy.")
 
     async def initialize_rabbitmq(self):
         """Initialize RabbitMQ connection."""

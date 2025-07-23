@@ -102,6 +102,56 @@ services:
     depends_on: 
       - msa-elasticsearch-service
 
+  msa-notification-service:
+    container_name: msa_notification_container
+    build:
+      context: ../server
+      dockerfile: notification-service/Dockerfile.development
+    restart: always
+    ports:
+      - 4001:4001
+    volumes:
+      - ../server/notification-service:/application/notification-service
+      - ../server/server-shared:/application/server-shared
+    working_dir: /application/notification-service
+    command: >
+      uvicorn server:app --host 0.0.0.0 --port 4001 --reload
+    env_file: ../server/notification-service/.env
+    environment:
+      - DEVELOPMENT=True
+      - JWT_SECRET=
+      - JWT_ALGORITHM=
+      - SECRET_KEY_ONE=super_secret_key_1
+      - SECRET_KEY_TWO=super_secret_key_2
+      - CLIENT_URL=http://example.com
+      - SERVER_IP=0.0.0.0
+      - SERVER_PORT=4001
+      # Database and Redis configuration
+      - POSTGRES_DATABASE_URL=
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
+      - REDIS_URL=
+      # RabbitMQ configuration
+      - RABBITMQ_ENDPOINT=amqp://labadmin:root123@msa_rabbitmq_container:5672
+      # Mail configuration
+      - MAIL_USERNAME=Joey Mayer
+      - MAIL_PASSWORD=gvUHmXcTQ3zScAcBKV
+      - MAIL_SERVER=smtp.ethereal.email
+      - MAIL_PORT=587
+      - MAIL_FROM=joey42@ethereal.email
+      - MAIL_FROM_NAME=Joey
+      - DOMAIN=example.com
+      - ENABLE_ES=1
+      - ELASTICSEARCH_URL=http://elastic:admin1234@msa_elasticsearch_container:9200
+      # Application Performance Monitoring (APM) configuration
+      - ENABLE_APM=1
+      - ELASTIC_APM_SERVER_URL=http://apm_server_container:8200
+      - ELASTIC_APM_SECRET_TOKEN=
+    depends_on:
+      - msa-elasticsearch-service
+    networks:
+      - es-network
+
 volumes:
   esdata:
     driver: local
