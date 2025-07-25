@@ -1,0 +1,59 @@
+# Dockerfile for Service Development Environment
+
+# ========== Stage 1: Builder ==========
+FROM python:3.13-slim AS builder
+
+ENV PYTHONUNBUFFERED=1 \
+    POETRY_VERSION=1.8.2 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
+
+WORKDIR /application
+
+# Install system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy project directories
+COPY api-gateway-service/ ./api-gateway-service
+COPY server-shared/ ./server-shared
+
+# Set working directory to main app
+WORKDIR /application/api-gateway-service
+
+# Install all dependencies
+RUN poetry install --with dev
+
+# ========== Stage 2: Dev Runtime ==========
+FROM python:3.13-slim AS dev
+
+ENV PYTHONUNBUFFERED=1 \
+    POETRY_VIRTUALENVS_CREATE=false
+
+WORKDIR /application
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /root/.cache
+
+# Copy installed packages
+COPY --from=builder /usr/local/lib/python3.13 /usr/local/lib/python3.13
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY api-gateway-service/ ./api-gateway-service
+COPY server-shared/ ./server-shared
+
+# Set working directory to app
+WORKDIR /application/api-gateway-service
+
+EXPOSE 4000
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "4000", "--reload"]

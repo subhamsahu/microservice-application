@@ -3,7 +3,6 @@ docker-volumes/
 # Local development
 .DS_Store
 server/.DS_Store
-TODO.md
 test_*
 # Environments
 .env
