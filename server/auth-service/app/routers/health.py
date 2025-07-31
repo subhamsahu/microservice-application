@@ -6,6 +6,7 @@ from fastapi import APIRouter, status
 from app.core.logger import logger
 
 from app.core.exceptions import AppException
+from app.core.constants import SERVICE_NAME
 
 router = APIRouter()
 
@@ -13,20 +14,21 @@ router = APIRouter()
     "/health",
     status_code=status.HTTP_200_OK,
     response_description="Health Check API",
-    tags=["Health"]
+    tags=["Health"],
+    operation_id="health_v1"
 )
-async def check_health():
+async def auth_check_health_handler():
     """
     Health check endpoint to verify the service is running.
     """
     try:
-        logger.info("Notification Service: check_health() method called")
+        logger.info(f"{SERVICE_NAME}: check_health() method called")
         return {
             "health_status": "healthy",
-            "message": "Notification Service is running smoothly."
+            "message": f"{SERVICE_NAME} is running smoothly."
         }
     except AppException as e:
-        logger.error(f"Notification Service: check_health() error method: {e}")
+        logger.error(f"{SERVICE_NAME}: check_health() error method: {e}")
         return {
             "error": str(e)
         }

@@ -3,13 +3,12 @@ This module contains the router for the health API.
 """
 from fastapi import APIRouter, status
 
-from server_shared.logger import Logger
+from app.core.logger import logger
 
 from app.core.exceptions import AppException
 from app.core.constants import SERVICE_NAME
 
 router = APIRouter()
-logger = Logger()
 
 @router.get(
     "/health",

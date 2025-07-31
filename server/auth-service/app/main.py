@@ -2,7 +2,6 @@
 
 # Standard library imports
 import logging
-import json
 from contextlib import asynccontextmanager
 from os import getpid
 from typing import AsyncGenerator, Union
@@ -20,18 +19,17 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import config as app_config
 from app.core.config import cors_settings
 from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME
-from app.core.exceptions import AppException, DatabaseInitializeError, ServerStartError
+from app.core.exceptions import AppException, DatabaseInitializeError, ServerStartError, register_all_errors
+from app.core.database import init_db
 from app.routers import app_router
 from app.core.logger import logger
 from app.services.rabbitmq.connection import create_rabbitmq_channel
-from app.services.rabbitmq.email_consumer import subscribe_to_auth_email_queue, publish_email_message
 from app.services.elasticsearch import ElasticSearchService
 
 # Private imports
 from server_shared.utils.formatters import display_dotted_string
 from server_shared.utils.meta_classes import Singleton
 from server_shared.middlewares.security_middleware import PreventHPPMiddleware, SecureHeadersMiddleware
-# from server_shared.middlewares.rate_limiter import init_rate_limiter, rate_limit_middleware
 from server_shared.middlewares.core_middlewares import BodySizeLimiterMiddleware
 
 
@@ -96,7 +94,7 @@ class Server(metaclass=Singleton):
         """Configures security middleware."""
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=[self.config.CLIENT_URL],
+            allow_origins=[self.config.API_GATEWAY_URL],
             allow_credentials=cors_settings.ALLOWED_CREDENTIALS,
             allow_methods=cors_settings.ALLOWED_METHODS,
             allow_headers=cors_settings.ALLOWED_HEADERS,
@@ -163,6 +161,7 @@ class Server(metaclass=Singleton):
                 status_code=500,
                 content={"detail": "Internal server error"}
             )
+        register_all_errors(self.app)
 
     def initialize_routes(self):
         """Defines application routes."""
@@ -172,6 +171,7 @@ class Server(metaclass=Singleton):
         """Initialize the application database connection."""
         self.logger.info("Initializing database connection...")
         try:
+            await init_db()  # Initialize the database schema
             self.logger.info("Database connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"Database initialization failed: {error}")
@@ -188,8 +188,6 @@ class Server(metaclass=Singleton):
         self.logger.info("Initializing RabbitMQ connection...")
         try:
             await create_rabbitmq_channel()
-            await subscribe_to_auth_email_queue()  # Start consuming auth email messages
-            # await publish_email_message()  # Optional: Publish a test email message
             self.logger.info("RabbitMQ connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"RabbitMQ initialization failed: {error}")

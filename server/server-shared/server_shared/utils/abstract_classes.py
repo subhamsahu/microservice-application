@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
 
-class AbstractDatabaseConnection(ABC):
+class AbstractAsyncDatabaseConnection(ABC):
     """
     Abstract base class for database connections.
     """
@@ -36,7 +36,7 @@ class AbstractDatabaseConnection(ABC):
         """
 
 
-class AbstractDatabaseManager(ABC):
+class AbstractAsyncDatabaseManager(ABC):
     """
     Abstract base class for database operations.
     """
