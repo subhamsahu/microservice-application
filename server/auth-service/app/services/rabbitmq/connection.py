@@ -1,15 +1,16 @@
+from typing import Union
 import asyncio
 import signal
+
 from aio_pika import connect_robust
 from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
 from aio_pika.exceptions import AMQPConnectionError
 
 from app.core.config import config
 from app.core.logger import logger
-from app.core.constants import SERVICE_NAME
 
+auth_channel: AbstractRobustChannel = None  # type: ignore
 
-auth_channel: AbstractRobustChannel | None = None # type: ignore
 
 async def create_rabbitmq_channel() -> AbstractRobustChannel | None:
     """
@@ -17,17 +18,21 @@ async def create_rabbitmq_channel() -> AbstractRobustChannel | None:
     :return: The created channel or None if connection fails.
     """
     global auth_channel
+
+    if auth_channel is not None:
+        return auth_channel
+
     if not config.RABBITMQ_ENDPOINT:
         logger.error("RabbitMQ endpoint is not configured.")
         return None
 
     try:
         connection: AbstractRobustConnection = await connect_robust(config.RABBITMQ_ENDPOINT)
-        channel: AbstractRobustChannel = await connection.channel()  # type: ignore
+        auth_channel = await connection.channel()  # type: ignore
         # Register signal handler to close connection on SIGINT
-        register_graceful_shutdown(channel, connection)
+        register_graceful_shutdown(auth_channel, connection)
 
-        return channel
+        return auth_channel
     except AMQPConnectionError as error:
         logger.error(f"Failed to connect to RabbitMQ: {error}")
     except Exception as error:
@@ -35,7 +40,11 @@ async def create_rabbitmq_channel() -> AbstractRobustChannel | None:
 
     return None
 
-def register_graceful_shutdown(channel: AbstractRobustChannel, connection: AbstractRobustConnection) -> None:
+
+def register_graceful_shutdown(
+        channel: AbstractRobustChannel,
+        connection: AbstractRobustConnection
+) -> None:
     """
     Closes the RabbitMQ channel and connection on SIGINT (Ctrl+C).
     """

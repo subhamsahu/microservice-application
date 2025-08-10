@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from os import getpid
 from typing import AsyncGenerator, Union
+import warnings
 
 # Third-party imports
 from fastapi import FastAPI, HTTPException, Request
@@ -25,12 +26,19 @@ from app.routers import app_router
 from app.core.logger import logger
 from app.services.rabbitmq.connection import create_rabbitmq_channel
 from app.services.elasticsearch import ElasticSearchService
+from app.core.middlewares import GatewayMiddleware
 
 # Private imports
 from server_shared.utils.formatters import display_dotted_string
 from server_shared.utils.meta_classes import Singleton
 from server_shared.middlewares.security_middleware import PreventHPPMiddleware, SecureHeadersMiddleware
 from server_shared.middlewares.core_middlewares import BodySizeLimiterMiddleware
+
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message="Duplicate Operation ID"
+)  # Need to Fix this duplicate warning
 
 
 @asynccontextmanager
@@ -71,7 +79,8 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
-        self.elastic_service = ElasticSearchService(self.config.ELASTICSEARCH_URL)
+        self.elastic_service = ElasticSearchService(
+            self.config.ELASTICSEARCH_URL)
 
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
@@ -82,7 +91,10 @@ class Server(metaclass=Singleton):
 
     async def postprocessing(self):
         """Postprocessing tasks after the server stops."""
+        from app.core.database import connection_obj
         self.logger.info(f"{self.service_name} is stopping...")
+        await connection_obj.disconnect()
+        self.logger.info("Disconnected from DB")
         self.logger.info("Postprocessing completed.")
 
     @property
@@ -92,6 +104,7 @@ class Server(metaclass=Singleton):
 
     def initialize_security_middleware(self):
         """Configures security middleware."""
+        self.logger.info("Initializing security middleware...")
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=[self.config.API_GATEWAY_URL],
@@ -121,7 +134,9 @@ class Server(metaclass=Singleton):
         """
         # Compression
         self.app.add_middleware(GZipMiddleware, minimum_size=1000)
-        self.app.add_middleware(BodySizeLimiterMiddleware, max_body_size=200 * 1024 * 1024)
+        self.app.add_middleware(BodySizeLimiterMiddleware,
+                                max_body_size=200 * 1024 * 1024)
+        self.app.add_middleware(GatewayMiddleware)
 
         # Add global rate limiting middleware
         # init_rate_limiter(self.app)
@@ -166,6 +181,8 @@ class Server(metaclass=Singleton):
     def initialize_routes(self):
         """Defines application routes."""
         self.app.include_router(router=app_router, prefix=API_PREFIX)
+        for route in self.app.routes:
+            print(f"{route.name}: {route.path}")
 
     async def initialize_database(self):
         """Initialize the application database connection."""
@@ -213,5 +230,6 @@ class Server(metaclass=Singleton):
             self.logger.error(
                 f"{self.service_name} start_server() error method: {error}")
             return None
+
 
 server: Server = Server().start_server()  # type: ignore

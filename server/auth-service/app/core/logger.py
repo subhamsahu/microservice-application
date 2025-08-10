@@ -25,5 +25,27 @@ class AppLogger(Logger, metaclass=Singleton):
                     log_level="INFO"
                 )
                 self._initialized = True
-                self.info(f"Logger initialized for service: {SERVICE_NAME}, Enabled ES Logging: {app_config.ENABLE_ES}")
+                self.info(
+                    f"Logger initialized for service: {SERVICE_NAME}, Enabled ES Logging: {app_config.ENABLE_ES}")
+
+    def debug(self, message: str) -> None:
+        """Logs a message at DEBUG level."""
+        super().debug(f"[{SERVICE_NAME}] {message}")
+
+    def info(self, message: str) -> None:
+        """Logs a message at INFO level."""
+        super().info(f"[{SERVICE_NAME}] {message}")
+
+    def warning(self, message: str) -> None:
+        """Logs a message at WARNING level."""
+        super().warning(f"[{SERVICE_NAME}] {message}")
+
+    def error(self, message: str) -> None:
+        """Logs a message at ERROR level."""
+        super().error(f"[{SERVICE_NAME}] {message}")
+
+    def critical(self, message: str) -> None:
+        """Logs a message at CRITICAL level."""
+        super().critical(f"[{SERVICE_NAME}] {message}")
+
 logger = AppLogger()

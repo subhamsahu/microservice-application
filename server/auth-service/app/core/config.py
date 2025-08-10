@@ -20,6 +20,12 @@ class ApplicationSettings(BaseSettings):
     SERVER_IP: str = "0.0.0.0"
     SERVER_PORT: int = 4002
 
+    # Cloudinary Configuration
+    CLOUDINARY_URL:str
+    CLOUDINARY_CLOUD_NAME:str
+    CLOUDINARY_API_KEY:str
+    CLOUDINARY_API_SECRET:str
+
     # Database and Redis configuration
     DATABASE_URL: str = Field(alias="MYSQL_URL")
     REDIS_HOST: str = "localhost"

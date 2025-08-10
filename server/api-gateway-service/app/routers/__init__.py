@@ -23,7 +23,7 @@ class AppRouter(metaclass=Singleton):
         Registers routers with specific prefixes and tags to the main application router.
         """
         self.__router.include_router(
-            health_router, prefix="/gateway", tags=["Health"])
+            health_router, prefix="/gateway-service", tags=["Health"])
         self.__router.include_router(
             proxy_router, prefix="/gateway", tags=["Proxy"])
 

@@ -31,7 +31,7 @@ class HTTPClientService:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "apigatewayToken": gateway_token
+            "gatewaytoken": gateway_token
         }
 
         return httpx.AsyncClient(

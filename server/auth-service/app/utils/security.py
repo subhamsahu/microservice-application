@@ -1,7 +1,10 @@
+"""
+This module contains the security functions for handling user-related operations.
+"""
 import logging
 import uuid
 from datetime import datetime, timedelta
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 import jwt
 from passlib.context import CryptContext
@@ -15,17 +18,26 @@ ACCESS_TOKEN_EXPIRY = 3600
 
 
 def generate_password_hash(password: str) -> str:
+    """
+    Generate a password hash.
+    """
     hash = passwd_context.hash(password)
     return hash
 
 
 def verify_password(password: str, hash: str) -> bool:
+    """
+    Verify a password against a hash.
+    """
     return passwd_context.verify(password, hash)
 
 
 def create_access_token(
     user_data: dict, expiry: timedelta = None, refresh: bool = False
 ):
+    """
+    Create an access token.
+    """
     payload = {}
 
     payload["user"] = user_data
@@ -44,6 +56,9 @@ def create_access_token(
 
 
 def decode_token(token: str) -> dict | None:
+    """
+    Decode a JWT token.
+    """
     try:
         token_data = jwt.decode(
             jwt=token, key=config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM]
@@ -60,17 +75,25 @@ serializer = URLSafeTimedSerializer(
 )
 
 def create_url_safe_token(data: dict):
+    """
+    Create a URL-safe token.
+    """
 
     token = serializer.dumps(data)
 
     return token
 
-def decode_url_safe_token(token:str):
+def decode_url_safe_token(token: str, max_age: int = 300):
+    """
+    Decode a URL-safe signed token with shared expiry.
+    """
     try:
-        token_data = serializer.loads(token)
-
+        token_data = serializer.loads(token, max_age=max_age)
         return token_data
-    
-    except Exception as e:
-        logging.error(str(e))
-        
+    except SignatureExpired:
+        logging.error("Token expired")
+        return None
+    except BadSignature:
+        logging.error("Invalid token signature")
+        return None
+  

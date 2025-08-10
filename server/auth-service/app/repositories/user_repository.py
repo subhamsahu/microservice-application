@@ -1,4 +1,8 @@
-from typing import Optional
+"""
+Database manager for user model
+"""
+from typing import Optional, List
+from uuid import UUID
 
 from fastapi import Depends
 from sqlmodel import select
@@ -6,9 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.core.database import get_db_session
-from app.core.logger import logger
-
-
 class UserRepository:
     """
     Repository for handling authentication-related database operations.
@@ -16,13 +17,16 @@ class UserRepository:
     def __init__(self, session: AsyncSession = Depends(get_db_session)):
         self.session = session
 
-    async def get_by_id(self, user_id: int) -> Optional[User]:
+    async def get_by_id(self, user_id: UUID) -> Optional[User]:
         """
         Get a user by id from the database.
         :param user_id: ID of the user to retrieve.
         :return: User object if found, None otherwise.
         """
-        return await self.session.get(User, user_id)
+        statement = select(User).where(User.uuid == user_id)
+        result = await self.session.exec(statement) # type: ignore
+        return result.first()
+
 
     async def get_by_email_or_username(self, email: str, username: str) -> Optional[User]:
         """
@@ -31,9 +35,37 @@ class UserRepository:
         :param username: Username of the user to retrieve.
         :return: User object if found, None otherwise.
         """
-        result = await self.session.exec(
+        result = await self.session.exec( # type: ignore
             select(User).where(
                 (User.email == email) | (User.username == username)
+            )
+        )
+        return result.first()
+    
+    async def get_by_username(self, username: str) -> Optional[User]:
+        """
+        Get a user by email or username from the database.
+        :param email: Email of the user to retrieve.
+        :param username: Username of the user to retrieve.
+        :return: User object if found, None otherwise.
+        """
+        result = await self.session.exec( # type: ignore
+            select(User).where(
+                (User.username == username)
+            )
+        )
+        return result.first()
+    
+    async def get_by_email(self, email: str) -> Optional[User]:
+        """
+        Get a user by email or username from the database.
+        :param email: Email of the user to retrieve.
+        :param username: Username of the user to retrieve.
+        :return: User object if found, None otherwise.
+        """
+        result = await self.session.exec( # type: ignore
+            select(User).where(
+                (User.email == email)
             )
         )
         return result.first()
@@ -68,3 +100,16 @@ class UserRepository:
         """
         await self.session.delete(user)
         await self.session.commit()
+
+    async def list_users(self, limit: int = 10, offset: int = 0) -> List[User]:
+        """
+        List users with pagination.
+        :param limit: Number of users to return.
+        :param offset: Number of users to skip.
+        :return: List of User objects.
+        """
+        result = await self.session.exec( # type: ignore
+            select(User).offset(offset).limit(limit)
+        )
+        users = result.all()
+        return users

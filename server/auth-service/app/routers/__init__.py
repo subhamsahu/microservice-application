@@ -7,6 +7,7 @@ from fastapi import APIRouter, status
 from server_shared.utils.meta_classes import Singleton
 from app.routers.health import router as health_router
 from app.routers.auth import router as auth_router
+from app.routers.user import router as user_router
 
 class AppRouter(metaclass=Singleton):
     """
@@ -25,6 +26,8 @@ class AppRouter(metaclass=Singleton):
             health_router, prefix="/auth-service", tags=["Health"])
         self.__router.include_router(
             auth_router, prefix="/auth", tags=["Auth"])
+        self.__router.include_router(
+            user_router, prefix="/auth/user", tags=["User"])
 
     @property
     def router(self):
@@ -32,16 +35,6 @@ class AppRouter(metaclass=Singleton):
         Returns the main application router.
         """
         return self.__router
-
-    def app_welcome(self):
-        """
-        This is the welcome endpoint for the application.
-        """
-        return {
-            "message": "Welcome to the Microservice Application Notification Service",
-            "version": "1.0.0"
-        }
-
 
 # Instantiate the BaseRouter
 app_router = AppRouter().router

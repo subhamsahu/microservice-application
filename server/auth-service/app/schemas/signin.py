@@ -1,6 +1,10 @@
-from pydantic import BaseModel, EmailStr, model_validator, Field
+"""
+Schemas for user login.
+"""
 from typing import Optional
 import re
+
+from pydantic import BaseModel, EmailStr, model_validator, Field
 
 class SigninSchema(BaseModel):
     """Schema for user login."""
@@ -10,18 +14,14 @@ class SigninSchema(BaseModel):
     deviceType: Optional[str] = Field(None)
 
     @model_validator(mode='after')
-    def validate_username(cls, values):
+    def validate_username(self):
         """Validates the username field to accept either a valid email or a username."""
-        username = values.get("username")
+        username = self.username
         if not username:
             raise ValueError("Username is a required field")
 
         is_email = re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", username)
-        if is_email:
-            # Valid email format
-            return values
-        else:
-            # Treat as username, apply min/max length manually
+        if not is_email:
             if len(username) < 4 or len(username) > 12:
                 raise ValueError("Invalid username: must be between 4 and 12 characters")
-        return values
+        return self
