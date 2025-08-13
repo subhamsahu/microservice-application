@@ -21,6 +21,7 @@ from app.core.config import config as app_config
 from app.core.config import cors_settings
 from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME
 from app.core.exceptions import AppException, DatabaseInitializeError, ServerStartError
+from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
 from app.services.rabbitmq.connection import create_rabbitmq_channel
@@ -131,38 +132,7 @@ class Server(metaclass=Singleton):
 
     def initialize_error_handlers(self):
         """Configures error handling."""
-        @self.app.exception_handler(RequestValidationError)
-        async def validation_exception_handler(_: Request, exc: RequestValidationError):
-            return JSONResponse(
-                status_code=422,
-                content={"detail": exc.errors(), "body": exc.body},
-            )
-
-        @self.app.exception_handler(HTTPException)
-        async def http_exception_handler(request: Request, exc: HTTPException):
-            # Handle 404 separately
-            if exc.status_code == 404:
-                full_url = str(request.url)
-                self.logger.log(
-                    logging.INFO, f"{full_url} endpoint does not exist.")
-                return JSONResponse(
-                    status_code=404,
-                    content={"message": "The endpoint called does not exist."}
-                )
-
-            # General HTTPException handler
-            return JSONResponse(
-                status_code=exc.status_code,
-                content={"detail": exc.detail}
-            )
-
-        @self.app.exception_handler(AppException)
-        async def unhandled_exception_handler(_: Request, exc: Exception):
-            self.logger.log(logging.ERROR, f"Unhandled error: {str(exc)}")
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Internal server error"}
-            )
+        register_all_errors(self.app)
 
     def initialize_routes(self):
         """Defines application routes."""

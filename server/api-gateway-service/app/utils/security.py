@@ -5,8 +5,10 @@ This module defines the security methods to be used by the  service
 from datetime import datetime, timedelta
 import logging
 import jwt
+from app.core.config import config
 
-JWT_SECRET = "your_secret_key_here"
+# Use GATEWAY_JWT_TOKEN for creating gateway tokens for inter-service communication
+JWT_SECRET = config.GATEWAY_JWT_TOKEN
 JWT_ALGORITHM = "HS256"
 
 def create_gateway_token(token_id: str):
@@ -19,7 +21,8 @@ def create_gateway_token(token_id: str):
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-print(create_gateway_token("auth"))  # Replace "auth" with your valid ID
+# Remove debug print statement - this should not be in production code
+# print(create_gateway_token("auth"))  # Replace "auth" with your valid ID
 
 def decode_token(token: str) -> dict | None:
     """
