@@ -9,6 +9,7 @@ from fastapi import Request, HTTPException
 
 from jwt import decode, exceptions as jwt_exceptions
 from starlette.status import HTTP_401_UNAUTHORIZED
+from ..error import NotAuthorizedError
 
 # List of valid token sources (e.g., different microservices)
 VALID_TOKEN_IDS: Set[str] = {
@@ -18,22 +19,6 @@ VALID_TOKEN_IDS: Set[str] = {
 # Replace with your actual JWT secret key
 JWT_SECRET: str = "your_secret_key_here"
 JWT_ALGORITHM: str = "HS256"
-
-
-class NotAuthorizedException(HTTPException):
-    """
-    Custom exception raised when a request is not authorized.
-
-    Attributes:
-        detail (str): Description of the error.
-    """
-
-    def __init__(self, detail: str):
-        super().__init__(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail=detail,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
 
 async def verify_gateway_request(request: Request) -> None:
@@ -57,8 +42,9 @@ async def verify_gateway_request(request: Request) -> None:
 
     # Check if the gatewaytoken header exists
     if not gateway_token:
-        raise NotAuthorizedException(
-            "Invalid request: verify_gateway_request() method - Request not coming from API gateway"
+        raise NotAuthorizedError(
+            message="Invalid request: verify_gateway_request() method - Request not coming from API gateway",
+            coming_from="Gateway Middleware"
         )
 
     try:
@@ -68,12 +54,13 @@ async def verify_gateway_request(request: Request) -> None:
 
         # Validate that the token ID is one of the known/authorized sources
         if token_id not in VALID_TOKEN_IDS:
-            raise NotAuthorizedException(
-                "Invalid request: verify_gateway_request() method - Token payload ID is not valid"
+            raise NotAuthorizedError(
+                message="Invalid request: verify_gateway_request() method - Token payload ID is not valid",
+                coming_from="Gateway Middleware"
             )
     except jwt_exceptions.ExpiredSignatureError as exc:
-        raise NotAuthorizedException("Token has expired") from exc
+        raise NotAuthorizedError("Token has expired",coming_from="Gateway Middleware") from exc
     except jwt_exceptions.DecodeError as exc:
-        raise NotAuthorizedException("Token could not be decoded") from exc
+        raise NotAuthorizedError("Token could not be decoded",coming_from="Gateway Middleware") from exc
     except jwt_exceptions.InvalidTokenError as exc:
-        raise NotAuthorizedException("Invalid token") from exc
+        raise NotAuthorizedError("Invalid token",coming_from="Gateway Middleware") from exc

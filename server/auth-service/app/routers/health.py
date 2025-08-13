@@ -10,6 +10,7 @@ from app.core.constants import SERVICE_NAME
 
 router = APIRouter()
 
+
 @router.get(
     "/health",
     status_code=status.HTTP_200_OK,
@@ -21,14 +22,8 @@ async def auth_check_health_handler():
     """
     Health check endpoint to verify the service is running.
     """
-    try:
-        logger.info(f"{SERVICE_NAME}: check_health() method called")
-        return {
-            "health_status": "healthy",
-            "message": f"{SERVICE_NAME} is running smoothly."
-        }
-    except AppException as e:
-        logger.error(f"{SERVICE_NAME}: check_health() error method: {e}")
-        return {
-            "error": str(e)
-        }
+    logger.info(f"{SERVICE_NAME}: check_health() method called")
+    return {
+        "health_status": "healthy",
+        "message": f"{SERVICE_NAME} is running smoothly."
+    }

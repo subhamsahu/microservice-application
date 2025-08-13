@@ -1,202 +1,32 @@
 """
-This module defines custom exceptions for the application.
+This module defines custom exception classes for the authentication service.
+All exceptions inherit from AppException and represent specific error cases
+such as invalid tokens, user not found, insufficient permissions, and more.
 """
-
-from typing import Any, Callable
-from fastapi.requests import Request
-from fastapi.responses import JSONResponse
-from fastapi import FastAPI, status
-from sqlalchemy.exc import SQLAlchemyError
-
-from app.core.logger import logger
-
-class AppException(Exception):
-    """
-    AppExceptionCase is the base exception class for the application.
-    """
-
+from server_shared.error import AppException
 
 class ServerStartError(AppException):
-    """
-    Exception raised when the server fails to start.
-    """
-
-
+    """Raised when the server fails to start."""
 class DatabaseInitializeError(AppException):
-    """
-    Exception raised when the server fails to start.
-    """
-
-
+    """Raised when the database initialization fails."""
 class InvalidToken(AppException):
-    """User has provided an invalid or expired token"""
-
-
+    """Raised when a provided token is invalid."""
 class RevokedToken(AppException):
-    """User has provided a token that has been revoked"""
-
-
+    """Raised when a token has been revoked."""
 class AccessTokenRequired(AppException):
-    """User has provided a refresh token when an access token is needed"""
-
-
+    """Raised when an access token is required but missing."""
 class RefreshTokenRequired(AppException):
-    """User has provided an access token when a refresh token is needed"""
-
-
+    """Raised when a refresh token is required but missing."""
 class UserAlreadyExists(AppException):
-    """User has provided an email for a user who exists during sign up."""
-
-
+    """Raised when attempting to create a user that already exists."""
 class InvalidCredentials(AppException):
-    """User has provided wrong email or password during log in."""
-
-
+    """Raised when user credentials are invalid during authentication."""
 class InsufficientPermission(AppException):
-    """User does not have the neccessary permissions to perform an action."""
-
-
+    """Raised when a user does not have sufficient permissions for an action."""
 class UserNotFound(AppException):
-    """User Not found"""
+    """Raised when a user is not found in the system."""
 
-
-class AccountNotVerified(Exception):
-    """Account not yet verified"""
-
-
-def create_exception_handler(
-    status_code: int, initial_detail: Any
-) -> Callable[[Request, Exception], JSONResponse]:
-    """
-    exception_handler is a factory function that creates an exception handler for FastAPI.
-    It takes a status code and initial detail as parameters and returns a handler function.
-    """
-
-    async def exception_handler(request: Request, exc: AppException):
-
-        return JSONResponse(content=initial_detail, status_code=status_code)
-
-    return exception_handler
-
-
-def register_all_errors(app: FastAPI):
-
-    app.add_exception_handler(
-        UserAlreadyExists,
-        create_exception_handler(
-            status_code=status.HTTP_403_FORBIDDEN,
-            initial_detail={
-                "message": "User with email already exists",
-                "error_code": "user_exists",
-            },
-        ),
-    )
-
-    app.add_exception_handler(
-        UserNotFound,
-        create_exception_handler(
-            status_code=status.HTTP_404_NOT_FOUND,
-            initial_detail={
-                "message": "User not found",
-                "error_code": "user_not_found",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        InvalidCredentials,
-        create_exception_handler(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            initial_detail={
-                "message": "Invalid Email Or Password",
-                "error_code": "invalid_email_or_password",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        InvalidToken,
-        create_exception_handler(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            initial_detail={
-                "message": "Token is invalid Or expired",
-                "resolution": "Please get new token",
-                "error_code": "invalid_token",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        RevokedToken,
-        create_exception_handler(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            initial_detail={
-                "message": "Token is invalid or has been revoked",
-                "resolution": "Please get new token",
-                "error_code": "token_revoked",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        AccessTokenRequired,
-        create_exception_handler(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            initial_detail={
-                "message": "Please provide a valid access token",
-                "resolution": "Please get an access token",
-                "error_code": "access_token_required",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        RefreshTokenRequired,
-        create_exception_handler(
-            status_code=status.HTTP_403_FORBIDDEN,
-            initial_detail={
-                "message": "Please provide a valid refresh token",
-                "resolution": "Please get an refresh token",
-                "error_code": "refresh_token_required",
-            },
-        ),
-    )
-    app.add_exception_handler(
-        InsufficientPermission,
-        create_exception_handler(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            initial_detail={
-                "message": "You do not have enough permissions to perform this action",
-                "error_code": "insufficient_permissions",
-            },
-        ),
-    )
-
-    app.add_exception_handler(
-        AccountNotVerified,
-        create_exception_handler(
-            status_code=status.HTTP_403_FORBIDDEN,
-            initial_detail={
-                "message": "Account Not verified",
-                "error_code": "account_not_verified",
-                "resolution": "Please check your email for verification details"
-            },
-        ),
-    )
-
-    @app.exception_handler(500)
-    async def internal_server_error(request, exc):
-        logger.error(f"Internal server error: {str(exc)}")
-        return JSONResponse(
-            content={
-                "message": "Oops! Something went wrong",
-                "error_code": "server_error",
-            },
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    @app.exception_handler(SQLAlchemyError)
-    async def database__error(request, exc):
-        logger.error(f"Database error: {str(exc)}")
-        return JSONResponse(
-            content={
-                "message": "Oops! Something went wrong",
-                "error_code": "server_error",
-            },
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+class AccountNotVerified(AppException):
+    """Raised when a user's account has not been verified."""
+class DocumentNotFound(AppException):
+    """Raised when a user's account has not been verified."""

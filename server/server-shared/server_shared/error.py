@@ -19,24 +19,31 @@ class IError:
     and the component that the error originated from.
     """
 
-    def __init__(self, message: str, status_code: int, status: str, coming_from: str):
+    def __init__(self, message: str, status_code: int, status: str, coming_from: str, **extra):
         self.message = message
         self.status_code = status_code
         self.status = status
         self.coming_from = coming_from
+        self.extra = extra
 
     def to_dict(self) -> dict:
         """
         Serializes the error details into a dictionary format.
         This method is useful for returning error responses in a consistent format."""
-        return {
+        data = {
             "message": self.message,
             "statusCode": self.status_code,
             "status": self.status,
             "comingFrom": self.coming_from
         }
+        if self.extra:
+            data.update(self.extra)
+        return data
+    
+class AppException(Exception):
+    """Base exception for the application."""
 
-class CustomError(Exception):
+class CustomError(AppException):
     """
     Represents a custom error that extends the base `Exception` class.
     This abstract class provides a common interface for handling custom errors
@@ -46,22 +53,23 @@ class CustomError(Exception):
     status: str = "error"
     coming_from: str
 
-    def __init__(self, message: str, coming_from: str):
+    def __init__(self, message: str, coming_from: str, **extra):
         super().__init__(message)
         self.message = message
         self.coming_from = coming_from
+        self.extra = extra
 
     def serialize_errors(self) -> dict:
         """
         Serializes the error details into a dictionary format.
         """
-        error = IError(
+        return IError(
             message=self.message,
             status_code=self.status_code,
             status=self.status,
-            coming_from=self.coming_from
-        )
-        return error.to_dict()
+            coming_from=self.coming_from,
+            **self.extra
+        ).to_dict()
 
 class BadRequestError(CustomError):
     """

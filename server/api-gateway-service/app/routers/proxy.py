@@ -44,9 +44,11 @@ async def proxy_handler(service: str, path: str, request: Request, http_method: 
                 "resend/email",
                 "verify/email",
                 "forgot/password",
-                "reset/password"
+                "reset/password",
+                "catalog"
             ]
         }
+        
     }
 
     service_map = service_maps.get(service)

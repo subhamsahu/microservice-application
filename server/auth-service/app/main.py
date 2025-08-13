@@ -1,17 +1,14 @@
 """Main module for the Server."""
 
 # Standard library imports
-import logging
 from contextlib import asynccontextmanager
 from os import getpid
 from typing import AsyncGenerator, Union
 import warnings
 
 # Third-party imports
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -19,8 +16,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 # Local imports
 from app.core.config import config as app_config
 from app.core.config import cors_settings
-from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME
-from app.core.exceptions import AppException, DatabaseInitializeError, ServerStartError, register_all_errors
+from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME, ELASTIC_SEARCH_INDEXES
+from app.core.exceptions import DatabaseInitializeError, ServerStartError
+from app.core.error_handler import register_all_errors
 from app.core.database import init_db
 from app.routers import app_router
 from app.core.logger import logger
@@ -79,8 +77,14 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
-        self.elastic_service = ElasticSearchService(
-            self.config.ELASTICSEARCH_URL)
+        self._elastic_service = None  # Lazy init
+
+    @property
+    def elastic_service(self) -> ElasticSearchService:
+        """Lazy load Elasticsearch service."""
+        if self._elastic_service is None:
+            self._elastic_service = ElasticSearchService(self.config.ELASTICSEARCH_URL)
+        return self._elastic_service
 
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
@@ -94,6 +98,7 @@ class Server(metaclass=Singleton):
         from app.core.database import connection_obj
         self.logger.info(f"{self.service_name} is stopping...")
         await connection_obj.disconnect()
+        await self.elastic_service.close()
         self.logger.info("Disconnected from DB")
         self.logger.info("Postprocessing completed.")
 
@@ -144,45 +149,13 @@ class Server(metaclass=Singleton):
 
     def initialize_error_handlers(self):
         """Configures error handling."""
-        @self.app.exception_handler(RequestValidationError)
-        async def validation_exception_handler(_: Request, exc: RequestValidationError):
-            return JSONResponse(
-                status_code=422,
-                content={"detail": exc.errors(), "body": exc.body},
-            )
-
-        @self.app.exception_handler(HTTPException)
-        async def http_exception_handler(request: Request, exc: HTTPException):
-            # Handle 404 separately
-            if exc.status_code == 404:
-                full_url = str(request.url)
-                self.logger.log(
-                    logging.INFO, f"{full_url} endpoint does not exist.")
-                return JSONResponse(
-                    status_code=404,
-                    content={"message": "The endpoint called does not exist."}
-                )
-
-            # General HTTPException handler
-            return JSONResponse(
-                status_code=exc.status_code,
-                content={"detail": exc.detail}
-            )
-
-        @self.app.exception_handler(AppException)
-        async def unhandled_exception_handler(_: Request, exc: Exception):
-            self.logger.log(logging.ERROR, f"Unhandled error: {str(exc)}")
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Internal server error"}
-            )
         register_all_errors(self.app)
 
     def initialize_routes(self):
         """Defines application routes."""
         self.app.include_router(router=app_router, prefix=API_PREFIX)
-        for route in self.app.routes:
-            print(f"{route.name}: {route.path}")
+        # for route in self.app.routes:
+        #     print(f"{route.name}: {route.path}")
 
     async def initialize_database(self):
         """Initialize the application database connection."""
@@ -194,10 +167,11 @@ class Server(metaclass=Singleton):
             self.logger.error(f"Database initialization failed: {error}")
             raise DatabaseInitializeError(
                 "Failed to initialize database connection.") from error
-        # Uncomment if using Elasticsearch
+        # Elasticsearch enablement
         if self.config.ENABLE_ES:
             self.logger.info("Checking Elasticsearch connection...")
-            self.elastic_service.check_connection()
+            await self.elastic_service.check_connection()
+            await self.elastic_service.create_index(ELASTIC_SEARCH_INDEXES.CATALOG)
             self.logger.info("Elasticsearch connection is healthy.")
 
     async def initialize_rabbitmq(self):

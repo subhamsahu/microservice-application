@@ -3,17 +3,12 @@ Elasticsearch client configuration and connection check.
 """
 
 # standard library imports
-from time import sleep
 import asyncio
+import logging
 
 # third-party imports
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import ConnectionError as ESConnectionError, NotFoundError
-
-# private imports
-from app.core.logger import logger
-from app.core.config import config as app_config
-from app.core.constants import SERVICE_NAME
 
 
 class ElasticSearchException(Exception):
@@ -25,7 +20,7 @@ class ElasticSearchService:
     A class to manage Elasticsearch connection and health check.
     """
 
-    def __init__(self, url: str = app_config.ELASTICSEARCH_URL):
+    def __init__(self, url: str):
         """
         Initializes the Elasticsearch client.
         :param url: URL of the Elasticsearch instance.
@@ -41,13 +36,11 @@ class ElasticSearchService:
         while not is_connected:
             try:
                 health = await self.client.cluster.health()
-                logger.info(
-                    f"{SERVICE_NAME.capitalize()} Elasticsearch health status - {health['status']}")
+                logging.info(f"Elasticsearch health status - {health['status']}")
                 is_connected = True
             except ESConnectionError as error:
-                logger.error("Connection to Elasticsearch failed. Retrying...")
-                logger.error(
-                    f"{SERVICE_NAME} check_connection() method: {error}")
+                logging.error("Connection to Elasticsearch failed. Retrying...")
+                logging.error(f"check_connection() method: {error}")
                 await asyncio.sleep(3)  # Backoff before retrying
 
     async def index_exists(self, index_name: str) -> bool:
@@ -55,20 +48,19 @@ class ElasticSearchService:
         try:
             return bool(await self.client.indices.exists(index=index_name))
         except ElasticSearchException as e:
-            logger.error(f"{e}")
+            logging.error(f"{e}")
             return False
 
     async def create_index(self, index_name: str, mappings: dict | None = None) -> None:
         """Create an index if it does not exist."""
         if await self.index_exists(index_name):
-            logger.info(f'Index "{index_name}" already exists.')
+            logging.info(f"Index '{index_name}' already exists.")
             return
         try:
             await self.client.indices.create(index=index_name, mappings=mappings or {})
-            logger.info(f"Created index: {index_name}")
+            logging.info(f"Created index: {index_name}")
         except ElasticSearchException as e:
-            logger.error(f"Error creating index {index_name}")
-            logger.error(f"{e}")
+            logging.error(f"Error creating index {index_name}: {e}")
 
     async def get_document_by_id(self, index: str, doc_id: str) -> dict | None:
         """Retrieve a document by its ID."""
@@ -76,32 +68,29 @@ class ElasticSearchService:
             doc = await self.client.get(index=index, id=doc_id)
             return doc["_source"] if doc.get("found", True) else None
         except NotFoundError:
-            logger.warning(f"Document {doc_id} not found in index {index}")
+            logging.warning(f"Document '{doc_id}' not found in index '{index}'")
             return None
         except ElasticSearchException as e:
-            logger.error("Error fetching document by ID")
-            logger.error(f"{e}")
+            logging.error(f"Error fetching document by ID: {e}")
             return None
 
     async def create_document(self, index: str, doc_id: str, body: dict) -> None:
         """Create or replace a document."""
         try:
             await self.client.index(index=index, id=doc_id, document=body)
-            logger.info(f"Document {doc_id} indexed in {index}")
+            logging.info(f"Document '{doc_id}' indexed in '{index}'")
         except ElasticSearchException as e:
-            logger.error(f"Error indexing document {doc_id}")
-            logger.error(f"{e}")
+            logging.error(f"Error indexing document '{doc_id}': {e}")
 
     async def delete_document(self, index: str, doc_id: str) -> None:
         """Delete a document by its ID."""
         try:
             await self.client.delete(index=index, id=doc_id)
-            logger.info(f"Document {doc_id} deleted from {index}")
+            logging.info(f"Document '{doc_id}' deleted from '{index}'")
         except NotFoundError:
-            logger.warning(f"Document {doc_id} not found in {index}")
+            logging.warning(f"Document '{doc_id}' not found in '{index}'")
         except ElasticSearchException as e:
-            logger.error(f"Error deleting document {doc_id}")
-            logger.error(f"{e}")
+            logging.error(f"Error deleting document '{doc_id}': {e}")
 
     async def search(self, **kwargs) -> dict:
         """
@@ -151,8 +140,7 @@ class ElasticSearchService:
             return result
 
         except ElasticSearchException as e:
-            logger.error(f"Error searching index: {kwargs.get('index')}")
-            logger.error(f"{e}")
+            logging.error(f"Error searching index '{kwargs.get('index')}': {e}")
             return {"hits": {"total": {"value": 0}, "hits": []}, "next_sort": None}
 
 
