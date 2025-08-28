@@ -23,15 +23,13 @@ from app.utils.security import (
     create_access_token,
     verify_password
 )
-from app.services.rabbitmq.connection import auth_channel
+from app.services.rabbitmq.connection import create_rabbitmq_channel
 from app.services.rabbitmq.producer import publish_message_to_queue
 from app.core.config import config
 from app.core.logger import logger
 
 from server_shared.cloudinary_upload import CloudinaryUploader
 from server_shared.utils.helpers.string_utils import StringUtils
-
-
 class UserService:
     """
     This service handles user-related operations such as creating, updating, retrieving, and deleting users.
@@ -69,6 +67,7 @@ class UserService:
         verification_token = create_url_safe_token(
             {"email": signup_data.email})
         # Publish a message to the RabbitMQ queue for email notification
+        auth_channel = await create_rabbitmq_channel()
         await publish_message_to_queue(
             channel=auth_channel,
             exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],
@@ -134,7 +133,7 @@ class UserService:
             user.device_type = signin_data.deviceType
 
             await self.user_repo.update(user)
-
+            auth_channel = await create_rabbitmq_channel()
             await publish_message_to_queue(
                 channel=auth_channel,
                 exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],
@@ -261,6 +260,7 @@ class UserService:
             "email": email_data.email
         })
         # Publish a message to the RabbitMQ queue for email notification
+        auth_channel = await create_rabbitmq_channel()
         await publish_message_to_queue(
             channel=auth_channel,
             exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],
@@ -291,6 +291,7 @@ class UserService:
         await self.user_repo.update(user)
 
         # Publish a message to the RabbitMQ queue for email notification
+        auth_channel = await create_rabbitmq_channel()
         await publish_message_to_queue(
             channel=auth_channel,
             exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],
@@ -325,6 +326,7 @@ class UserService:
         await self.user_repo.update(existing_user)
 
         # Publish message to RabbitMQ
+        auth_channel = await create_rabbitmq_channel()
         await publish_message_to_queue(
             channel=auth_channel,
             exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],
