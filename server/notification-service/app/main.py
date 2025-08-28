@@ -24,8 +24,9 @@ from app.core.exceptions import AppException, DatabaseInitializeError, ServerSta
 from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
-from app.services.rabbitmq.connection import create_rabbitmq_channel
-from app.services.rabbitmq.email_consumer import subscribe_to_auth_email_queue, publish_email_message
+from app.services.rabbitmq.connection import rabbitmq_manager
+from app.services.rabbitmq.email_consumer import subscribe_to_auth_email_queue
+from app.services.rabbitmq.producer import publish_email_message
 from app.services.elasticsearch import ElasticSearchService
 
 # Private imports
@@ -76,6 +77,11 @@ class Server(metaclass=Singleton):
         self.logger = logger
         self.elastic_service = ElasticSearchService(self.config.ELASTICSEARCH_URL)
 
+    @property
+    def rabbitmq_manager(self):
+        """Get the singleton RabbitMQ manager."""
+        return rabbitmq_manager
+
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
         self.logger.info(f"{self.service_name} is starting...")
@@ -86,6 +92,10 @@ class Server(metaclass=Singleton):
     async def postprocessing(self):
         """Postprocessing tasks after the server stops."""
         self.logger.info(f"{self.service_name} is stopping...")
+        
+        # Close singleton connections
+        await self.rabbitmq_manager.close()
+        
         self.logger.info("Postprocessing completed.")
 
     @property
@@ -157,7 +167,7 @@ class Server(metaclass=Singleton):
         """Initialize RabbitMQ connection."""
         self.logger.info("Initializing RabbitMQ connection...")
         try:
-            await create_rabbitmq_channel()
+            await self.rabbitmq_manager.initialize()
             await subscribe_to_auth_email_queue()  # Start consuming auth email messages
             # await publish_email_message()  # Optional: Publish a test email message
             self.logger.info("RabbitMQ connection initialized successfully.")

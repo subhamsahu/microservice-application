@@ -1,32 +1,140 @@
 """
-This module contains the router for the health API.
+Health check router for monitoring service and connection status.
 """
 from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
 
 from app.core.logger import logger
-
+from app.services.elasticsearch import ElasticSearchService
+from app.services.rabbitmq.connection import rabbitmq_manager
+from app.core.config import config
 from app.core.exceptions import AppException
+from app.core.constants import SERVICE_NAME
 
 router = APIRouter()
+
 
 @router.get(
     "/health",
     status_code=status.HTTP_200_OK,
-    response_description="Health Check API",
-    tags=["Health"]
+    response_description="Comprehensive Health Check API",
+    tags=["Health"],
+    operation_id="health_v1"
 )
-async def check_health():
+async def notification_check_health_handler():
     """
-    Health check endpoint to verify the service is running.
+    Comprehensive health check endpoint.
+    Returns the status of all critical services.
+    """
+    logger.info(f"{SERVICE_NAME}: check_health() method called")
+    
+    health_status = {
+        "service": SERVICE_NAME,
+        "status": "healthy",
+        "version": "0.0.1",
+        "connections": {
+            "elasticsearch": "disabled",
+            "rabbitmq": "unknown"
+        },
+        "config": {
+            "elasticsearch_enabled": config.ENABLE_ES
+        }
+    }
+    
+    overall_healthy = True
+    
+    try:
+        # Check ElasticSearch Connection
+        if config.ENABLE_ES:
+            elastic_service = ElasticSearchService(config.ELASTICSEARCH_URL)
+            if elastic_service and hasattr(elastic_service, 'client') and elastic_service.client:
+                try:
+                    elastic_service.check_connection()
+                    health_status["connections"]["elasticsearch"] = "healthy"
+                except Exception:
+                    health_status["connections"]["elasticsearch"] = "unhealthy"
+                    overall_healthy = False
+            else:
+                health_status["connections"]["elasticsearch"] = "disconnected"
+                overall_healthy = False
+        else:
+            health_status["connections"]["elasticsearch"] = "disabled"
+    except Exception as e:
+        logger.error(f"Elasticsearch health check failed: {e}")
+        health_status["connections"]["elasticsearch"] = "unhealthy"
+        overall_healthy = False
+    
+    try:
+        # Check RabbitMQ Connection
+        if rabbitmq_manager.is_connected():
+            health_status["connections"]["rabbitmq"] = "healthy"
+        else:
+            health_status["connections"]["rabbitmq"] = "disconnected"
+            overall_healthy = False
+    except Exception as e:
+        logger.error(f"RabbitMQ health check failed: {e}")
+        health_status["connections"]["rabbitmq"] = "unhealthy"
+        overall_healthy = False
+    
+    # Set overall status
+    if not overall_healthy:
+        health_status["status"] = "degraded"
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=health_status
+        )
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=health_status
+    )
+
+
+@router.get(
+    "/health/ready",
+    status_code=status.HTTP_200_OK,
+    response_description="Readiness Check",
+    tags=["Health"],
+    operation_id="readiness_v1"
+)
+async def readiness_check():
+    """
+    Readiness probe for Kubernetes deployments.
+    Returns 200 if the service is ready to serve traffic.
     """
     try:
-        logger.info("Notification Service: check_health() method called")
-        return {
-            "health_status": "healthy",
-            "message": "Notification Service is running smoothly."
-        }
-    except AppException as e:
-        logger.error(f"Notification Service: check_health() error method: {e}")
-        return {
-            "error": str(e)
-        }
+        # Check if essential services are available
+        ready = True
+        
+        # RabbitMQ should be connected for messaging
+        if not rabbitmq_manager.is_connected():
+            ready = False
+        
+        if ready:
+            return {"status": "ready"}
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "not ready"}
+            )
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "not ready", "error": str(e)}
+        )
+
+
+@router.get(
+    "/health/live",
+    status_code=status.HTTP_200_OK,
+    response_description="Liveness Check",
+    tags=["Health"],
+    operation_id="liveness_v1"
+)
+async def liveness_check():
+    """
+    Liveness probe for Kubernetes deployments.
+    Returns 200 if the service is alive.
+    """
+    return {"status": "alive"}

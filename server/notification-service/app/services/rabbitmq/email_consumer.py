@@ -8,40 +8,11 @@ from aio_pika import IncomingMessage, ExchangeType
 from aio_pika.abc import AbstractRobustChannel
 from app.core.config import config
 from app.schemas.email import EmailMessage as EmailLocals
-# from app.services.email_service import send_email
 from app.services.rabbitmq.connection import create_rabbitmq_channel
 from app.core.logger import logger
 from app.services.email_service import EmailService
 
 email_service = EmailService()
-
-# Old: publish_test_email
-
-
-async def publish_email_message():
-    from aio_pika import Message, ExchangeType
-    channel = await create_rabbitmq_channel()
-    if not channel:
-        logger.error("RabbitMQ channel not available for publishing.")
-        return
-
-    exchange = await channel.declare_exchange("msa-email-notification", ExchangeType.DIRECT)
-
-    message_body = {
-        "template": "verifyEmail",
-        "receiverEmail": "sam766626@gmail.com",
-        "username": "Subham",
-        "verifyLink": "http://localhost:3000/verify?token=1234",
-        "resetLink": ""
-    }
-
-    message = Message(
-        body=json.dumps(message_body).encode(),
-        content_type="application/json"
-    )
-
-    await exchange.publish(message, routing_key="auth-email")
-    logger.info("Published email message to exchange.")
 
 
 async def subscribe_to_auth_email_queue(channel: AbstractRobustChannel | None = None) -> None:
