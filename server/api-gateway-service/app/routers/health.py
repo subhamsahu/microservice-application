@@ -5,7 +5,7 @@ from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
 from app.core.logger import logger
-from app.services.elasticsearch import ElasticSearchService
+from app.services.elasticsearch import elasticsearch_service
 from app.core.config import config
 from app.core.exceptions import AppException
 from app.core.constants import SERVICE_NAME
@@ -45,10 +45,9 @@ async def api_gateway_check_health_handler():
     try:
         # Check ElasticSearch Connection
         if config.ENABLE_ES:
-            elastic_service = ElasticSearchService(config.ELASTICSEARCH_URL)
-            if elastic_service and hasattr(elastic_service, 'client') and elastic_service.client:
+            if elasticsearch_service.client and elasticsearch_service._connected:
                 try:
-                    elastic_service.check_connection()
+                    await elasticsearch_service.client.cluster.health()
                     health_status["connections"]["elasticsearch"] = "healthy"
                 except Exception:
                     health_status["connections"]["elasticsearch"] = "unhealthy"
