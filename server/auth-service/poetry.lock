@@ -162,7 +162,6 @@ files = [
 
 [package.dependencies]
 frozenlist = ">=1.1.0"
-typing-extensions = {version = ">=4.2", markers = "python_version < \"3.13\""}
 
 [[package]]
 name = "aiosmtplib"
@@ -241,7 +240,6 @@ files = [
 [package.dependencies]
 idna = ">=2.8"
 sniffio = ">=1.1"
-typing_extensions = {version = ">=4.5", markers = "python_version < \"3.13\""}
 
 [package.extras]
 doc = ["Sphinx (>=8.2,<9.0)", "packaging", "sphinx-autodoc-typehints (>=1.2.0)", "sphinx_rtd_theme"]
@@ -757,9 +755,6 @@ files = [
     {file = "exceptiongroup-1.3.0-py3-none-any.whl", hash = "sha256:4d111e6e0c13d0644cad6ddaa7ed0261a0b36971f6d23e7ec9b4b9097da78a10"},
     {file = "exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88"},
 ]
-
-[package.dependencies]
-typing-extensions = {version = ">=4.6.0", markers = "python_version < \"3.13\""}
 
 [package.extras]
 test = ["pytest (>=6)"]
@@ -2184,11 +2179,12 @@ name = "server-shared"
 version = "0.1.0"
 description = "Reusable shared server-side utilities including logging, middleware, and cloudinary integration."
 optional = false
-python-versions = "^3.11"
+python-versions = "^3.13"
 files = []
 develop = false
 
 [package.dependencies]
+aiohttp = "^3.12.15"
 aiosqlite = "^0.21.0"
 asyncmy = "^0.2.10"
 asyncpg = "^0.30.0"
@@ -2380,7 +2376,6 @@ files = [
 
 [package.dependencies]
 anyio = ">=3.6.2,<5"
-typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""}
 
 [package.extras]
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
@@ -2924,5 +2919,5 @@ propcache = ">=0.2.1"
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.11"
-content-hash = "1f4b3cf8e151641a0356c65784ab1ea8836d56359a19b3f5925cd69acae2557d"
+python-versions = "^3.13"
+content-hash = "32aa5c2f0c7589b2a0994b83d4eb961238892919fd4864d4e79ae63f988e9f1c"

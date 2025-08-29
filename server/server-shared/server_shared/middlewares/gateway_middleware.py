@@ -17,7 +17,7 @@ VALID_TOKEN_IDS: Set[str] = {
 }
 
 # Replace with your actual JWT secret key
-JWT_SECRET: str = "your_secret_key_here"
+JWT_SECRET: str = "your_gateway_secret_key_here"
 JWT_ALGORITHM: str = "HS256"
 
 

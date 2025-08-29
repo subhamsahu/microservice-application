@@ -24,9 +24,10 @@ from app.core.exceptions import AppException, DatabaseInitializeError, ServerSta
 from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
-from app.services.rabbitmq.connection import create_rabbitmq_channel
-from app.services.rabbitmq.email_consumer import subscribe_to_auth_email_queue, publish_email_message
-from app.services.elasticsearch import ElasticSearchService
+from app.services.rabbitmq.connection import rabbitmq_manager
+from app.services.rabbitmq.email_consumer import subscribe_to_auth_email_queue
+from app.services.rabbitmq.producer import publish_email_message
+from app.services.elasticsearch import elasticsearch_service
 
 # Private imports
 from server_shared.utils.formatters import display_dotted_string
@@ -74,7 +75,17 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
-        self.elastic_service = ElasticSearchService(self.config.ELASTICSEARCH_URL)
+        # Use singleton instances - no need to create new ones
+
+    @property
+    def elastic_service(self):
+        """Get the singleton Elasticsearch service."""
+        return elasticsearch_service
+
+    @property
+    def rabbitmq_manager(self):
+        """Get the singleton RabbitMQ manager."""
+        return rabbitmq_manager
 
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
@@ -86,6 +97,12 @@ class Server(metaclass=Singleton):
     async def postprocessing(self):
         """Postprocessing tasks after the server stops."""
         self.logger.info(f"{self.service_name} is stopping...")
+        
+        # Close all singleton connections
+        await self.elastic_service.close()
+        await self.rabbitmq_manager.close()
+        
+        self.logger.info("All connections closed successfully.")
         self.logger.info("Postprocessing completed.")
 
     @property
@@ -147,17 +164,17 @@ class Server(metaclass=Singleton):
             self.logger.error(f"Database initialization failed: {error}")
             raise DatabaseInitializeError(
                 "Failed to initialize database connection.") from error
-        # Uncomment if using Elasticsearch
+        # Elasticsearch enablement
         if self.config.ENABLE_ES:
             self.logger.info("Checking Elasticsearch connection...")
-            self.elastic_service.check_connection()
+            await self.elastic_service.initialize()
             self.logger.info("Elasticsearch connection is healthy.")
 
     async def initialize_rabbitmq(self):
         """Initialize RabbitMQ connection."""
         self.logger.info("Initializing RabbitMQ connection...")
         try:
-            await create_rabbitmq_channel()
+            await self.rabbitmq_manager.initialize()
             await subscribe_to_auth_email_queue()  # Start consuming auth email messages
             # await publish_email_message()  # Optional: Publish a test email message
             self.logger.info("RabbitMQ connection initialized successfully.")

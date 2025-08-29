@@ -22,8 +22,8 @@ from app.core.error_handler import register_all_errors
 from app.core.database import init_db
 from app.routers import app_router
 from app.core.logger import logger
-from app.services.rabbitmq.connection import create_rabbitmq_channel
-from app.services.elasticsearch import ElasticSearchService
+from app.services.rabbitmq.connection import rabbitmq_manager
+from app.services.elasticsearch import elasticsearch_service
 from app.core.middlewares import GatewayMiddleware
 
 # Private imports
@@ -77,14 +77,17 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
-        self._elastic_service = None  # Lazy init
+        # Use singleton instances - no need to create new ones
 
     @property
-    def elastic_service(self) -> ElasticSearchService:
-        """Lazy load Elasticsearch service."""
-        if self._elastic_service is None:
-            self._elastic_service = ElasticSearchService(self.config.ELASTICSEARCH_URL)
-        return self._elastic_service
+    def elastic_service(self):
+        """Get the singleton Elasticsearch service."""
+        return elasticsearch_service
+    
+    @property
+    def rabbitmq_manager(self):
+        """Get the singleton RabbitMQ manager."""
+        return rabbitmq_manager
 
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
@@ -97,9 +100,13 @@ class Server(metaclass=Singleton):
         """Postprocessing tasks after the server stops."""
         from app.core.database import connection_obj
         self.logger.info(f"{self.service_name} is stopping...")
+        
+        # Close all singleton connections
         await connection_obj.disconnect()
         await self.elastic_service.close()
-        self.logger.info("Disconnected from DB")
+        await self.rabbitmq_manager.close()
+        
+        self.logger.info("All connections closed successfully.")
         self.logger.info("Postprocessing completed.")
 
     @property
@@ -143,10 +150,6 @@ class Server(metaclass=Singleton):
                                 max_body_size=200 * 1024 * 1024)
         self.app.add_middleware(GatewayMiddleware)
 
-        # Add global rate limiting middleware
-        # init_rate_limiter(self.app)
-        # self.app.middleware("http")(rate_limit_middleware())
-
     def initialize_error_handlers(self):
         """Configures error handling."""
         register_all_errors(self.app)
@@ -170,7 +173,7 @@ class Server(metaclass=Singleton):
         # Elasticsearch enablement
         if self.config.ENABLE_ES:
             self.logger.info("Checking Elasticsearch connection...")
-            await self.elastic_service.check_connection()
+            await self.elastic_service.initialize()
             await self.elastic_service.create_index(ELASTIC_SEARCH_INDEXES.CATALOG)
             self.logger.info("Elasticsearch connection is healthy.")
 
@@ -178,7 +181,7 @@ class Server(metaclass=Singleton):
         """Initialize RabbitMQ connection."""
         self.logger.info("Initializing RabbitMQ connection...")
         try:
-            await create_rabbitmq_channel()
+            await self.rabbitmq_manager.initialize()
             self.logger.info("RabbitMQ connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"RabbitMQ initialization failed: {error}")

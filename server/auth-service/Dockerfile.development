@@ -1,4 +1,4 @@
-# Dockerfile for Notification Service Development Environment
+# Dockerfile for Auth Service Development Environment
 
 # ========== Stage 1: Builder ==========
 FROM python:3.13-slim AS builder

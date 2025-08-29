@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.13"
 cloudinary = "^1.44.1"
 elasticsearch = "^8.10.1"
 fastapi = "^0.116.1"
