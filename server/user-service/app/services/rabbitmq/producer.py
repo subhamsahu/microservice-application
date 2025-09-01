@@ -40,6 +40,6 @@ async def publish_message_to_queue(
         )
 
         await exchange.publish(message_body, routing_key=routing_key)
-        logger.info(f"Published message to exchange. {exchange_name}")
+        logger.info("Published email message to exchange.")
     except FailedToPublishRabbitMQMessage as exc:
         logger.error(f"Failed to publish message to RabbitMQ: {exc}")

@@ -58,6 +58,10 @@ async def verify_gateway_request(request: Request) -> None:
                 message="Invalid request: verify_gateway_request() method - Token payload ID is not valid",
                 coming_from="Gateway Middleware"
             )
+        # ✅ Attach user details if present
+        user = payload.get("user")
+        if user:
+            request.state.user = user
     except jwt_exceptions.ExpiredSignatureError as exc:
         raise NotAuthorizedError("Token has expired",coming_from="Gateway Middleware") from exc
     except jwt_exceptions.DecodeError as exc:

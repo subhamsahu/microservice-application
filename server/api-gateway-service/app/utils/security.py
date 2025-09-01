@@ -11,12 +11,13 @@ from app.core.config import config
 JWT_SECRET = config.GATEWAY_JWT_TOKEN
 JWT_ALGORITHM = "HS256"
 
-def create_gateway_token(token_id: str):
+def create_gateway_token(token_id: str, user: dict | None = None) -> str:
     """
     create gateway token for the request
     """
     payload = {
         "id": token_id,
+        "user": user,
         "exp": datetime.utcnow() + timedelta(hours=1)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

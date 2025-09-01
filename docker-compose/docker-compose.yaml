@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   msa-redis-service:
     container_name: msa_redis_container
@@ -9,6 +8,7 @@ services:
     command: redis-server --loglevel warning
     volumes:
       - ../docker-volumes/cache:/data
+    profiles: ["infra"]
 
   msa-mongodb-service:
     container_name: msa_mongodb_container
@@ -18,6 +18,7 @@ services:
       - 27018:27017
     volumes:
       - ../docker-volumes/data:/data/db
+    profiles: ["infra"]
 
   msa-mysql-service:
     container_name: msa_mysql_container
@@ -34,7 +35,8 @@ services:
     volumes:
       - ../docker-volumes/mysql:/var/lib/mysql
     networks:
-      - es-network 
+      - es-network
+    profiles: ["infra"] 
 
   msa-postgres-service:
     container_name: msa_postgres_container
@@ -48,6 +50,7 @@ services:
       - '5432:5432'
     volumes:
       - ../docker-volumes/postgres:/var/lib/postgresql
+    profiles: ["infra"]
 
   msa-rabbitmq-service:
     container_name: msa_rabbitmq_container
@@ -63,6 +66,7 @@ services:
       - '15672:15672'
     networks:
       - es-network
+    profiles: ["infra"]
 
   msa-elasticsearch-service:
     container_name: msa_elasticsearch_container
@@ -88,6 +92,7 @@ services:
       # - ../docker-volumes/esdata:/usr/share/elasticsearch/data
     networks:
       - es-network
+    profiles: ["infra"]
 
   msa-kibana-service:
     container_name: msa_kibana_container
@@ -103,6 +108,7 @@ services:
       - ../configurations/kibana.yml/:/usr/share/kibana/config/kibana.yml:ro
     depends_on: 
       - msa-elasticsearch-service
+    profiles: ["infra"]
 
   msa-notification-service:
     container_name: msa_notification_container
@@ -155,6 +161,7 @@ services:
       - msa-rabbitmq-service
     networks:
       - es-network
+    profiles: ["services"]
 
   msa-auth-service:
     container_name: msa_auth_container
@@ -210,6 +217,7 @@ services:
       - msa-rabbitmq-service
     networks:
       - es-network
+    profiles: ["services"]
   msa-api-gateway-service:
     container_name: msa_api_gateway_container
     build:
@@ -259,6 +267,7 @@ services:
       - msa-elasticsearch-service
     networks:
       - es-network
+    profiles: ["services"]
 
 volumes:
   esdata:

@@ -30,6 +30,8 @@ from app.core.logger import logger
 
 from server_shared.cloudinary_upload import CloudinaryUploader
 from server_shared.utils.helpers.string_utils import StringUtils
+
+
 class UserService:
     """
     This service handles user-related operations such as creating, updating, retrieving, and deleting users.
@@ -42,6 +44,10 @@ class UserService:
             "msa_email_queue": {
                 "exchange_name": "msa-email-notification",
                 "routing_key": "auth-email"
+            },
+            "msa_buyer_update_queue": {
+                "exchange_name": "msa-buyer-update",
+                "routing_key": "user-buyer",
             }
         }
         self.__cloudinary_service = CloudinaryUploader(
@@ -66,8 +72,23 @@ class UserService:
         created_user = await self.user_repo.create(user)
         verification_token = create_url_safe_token(
             {"email": signup_data.email})
-        # Publish a message to the RabbitMQ queue for email notification
+        # Publish a message to the RabbitMQ queue for buyer creation
         auth_channel = await create_rabbitmq_channel()
+        await publish_message_to_queue(
+            channel=auth_channel,
+            exchange_name=self.rabbitmq_configuration["msa_buyer_update_queue"]["exchange_name"],
+            routing_key=self.rabbitmq_configuration["msa_buyer_update_queue"]["routing_key"],
+            message={
+                "user_data": {
+                    "username": created_user.username,
+                    "email": created_user.email,
+                    "profile_picture": created_user.profile_picture,
+                    "country": created_user.country
+                },
+                "from": "auth_service"
+            }
+        )
+        # Publish a message to the RabbitMQ queue for user notification
         await publish_message_to_queue(
             channel=auth_channel,
             exchange_name=self.rabbitmq_configuration["msa_email_queue"]["exchange_name"],

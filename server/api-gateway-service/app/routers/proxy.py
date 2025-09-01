@@ -47,8 +47,17 @@ async def proxy_handler(service: str, path: str, request: Request, http_method: 
                 "reset/password",
                 "catalog"
             ]
-        }
-        
+        },
+        "buyer": {
+            "base_url": f"{config.USERS_BASE_URL}/api/v1/buyer",
+            "public_routes": [
+            ]
+        },  
+        "seller": {
+            "base_url": f"{config.USERS_BASE_URL}/api/v1/seller",
+            "public_routes": [
+            ]
+        }  
     }
 
     service_map = service_maps.get(service)
@@ -57,11 +66,13 @@ async def proxy_handler(service: str, path: str, request: Request, http_method: 
     base_url = service_map.get("base_url") if service_map else None
     public_paths = service_map.get("public_routes", [])
     logger.info(f"Public paths: {public_paths}")
+    current_user = None
     if not any(path.startswith(pub) for pub in public_paths):
         # ✅ Manually run token validation and attach user
         token_bearer = AccessTokenBearer()
         token_details: dict = await token_bearer(request)
-        request.state.user = token_details.get("user")
+        current_user = token_details.get("user")
+        logger.info(f"Authenticated user: {current_user}")
     query_params = request.url.query
     target_url = f"{base_url}/{path}"
     if query_params:
@@ -70,7 +81,7 @@ async def proxy_handler(service: str, path: str, request: Request, http_method: 
     body = await request.body()
     logger.info(f"{http_method} {target_url}")
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
-    headers['gatewaytoken'] = create_gateway_token(service)
+    headers['gatewaytoken'] = create_gateway_token(service, current_user)
     try:
         async with httpx.AsyncClient() as client:
             response = await client.request(
