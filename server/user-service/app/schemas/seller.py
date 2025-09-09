@@ -85,7 +85,7 @@ class SellerResponse(BaseModel):
     completed_jobs: int
     cancelled_jobs: int
     total_earnings: float
-    total_gigs: int
+    total_catalogs: int
     created_at: datetime
 
     class Config:

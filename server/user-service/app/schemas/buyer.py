@@ -14,7 +14,7 @@ class BuyerResponse(BaseModel):
     profile_picture: str = Field(alias="profilePicture")
     country: str
     is_seller: bool = Field(alias="isSeller")
-    purchased_gigs: List[str] = Field(alias="purchasedGigs")
+    purchased_catalogs: List[str] = Field(alias="purchasedCatalogs")
     created_at: datetime = Field(alias="createdAt")
 
     class Config:
@@ -33,5 +33,5 @@ class BuyerUpdate(BaseModel):
     email: Optional[str] = None
     profile_picture: Optional[str] = None
     country: Optional[str] = None
-    purchased_gigs: Optional[List[str]] = None
+    purchased_catalogs: Optional[List[str]] = None
     is_seller: bool | None = None

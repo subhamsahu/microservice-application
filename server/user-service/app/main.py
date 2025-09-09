@@ -22,7 +22,7 @@ from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
 from app.services.rabbitmq.connection import rabbitmq_manager
-from app.services.rabbitmq.consumer import subscribe_to_buyer_update_queue
+from app.services.rabbitmq.consumer import consume_buyer_update_direct_message
 from app.services.elasticsearch import elasticsearch_service
 from app.core.middlewares import GatewayMiddleware
 from app.core.database import init_db, disconnect_db
@@ -181,7 +181,7 @@ class Server(metaclass=Singleton):
         self.logger.info("Initializing RabbitMQ connection...")
         try:
             await self.rabbitmq_manager.initialize()
-            await subscribe_to_buyer_update_queue()
+            await consume_buyer_update_direct_message()
             self.logger.info("RabbitMQ connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"RabbitMQ initialization failed: {error}")

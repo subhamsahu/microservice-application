@@ -26,4 +26,4 @@ class ELASTIC_SEARCH_INDEXES:
 BUYER_QUEUE = "user_buyer_queue"
 SELLER_QUEUE = "user_seller_queue"
 REVIEW_QUEUE = "review_queue"
-SEED_GIG_QUEUE = "seed_gig_queue"
+SEED_CATALOG_QUEUE = "seed_catalog_queue"

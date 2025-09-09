@@ -15,7 +15,7 @@ class Buyer(Document):
     profile_picture: str = Field(default="")
     country: str
     is_seller: bool = Field(default=False)
-    purchased_gigs: List[ObjectId] = Field(default_factory=list)
+    purchased_catalogs: List[ObjectId] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
