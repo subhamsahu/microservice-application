@@ -65,10 +65,8 @@ async def consume_seller_update_direct_message(channel: AbstractRobustChannel | 
         routing_key = "user-seller"
         queue_name = "user-seller-queue"
 
-        # type: ignore
-        exchange = await channel.declare_exchange(exchange_name, ExchangeType.DIRECT)
-        # type: ignore
-        queue = await channel.declare_queue(queue_name, durable=True, auto_delete=False)
+        exchange = await channel.declare_exchange(exchange_name, ExchangeType.DIRECT) # type: ignore
+        queue = await channel.declare_queue(queue_name, durable=True, auto_delete=False) # type: ignore
         await queue.bind(exchange, routing_key)
 
         async def on_message(message: IncomingMessage):
@@ -76,19 +74,24 @@ async def consume_seller_update_direct_message(channel: AbstractRobustChannel | 
                 try:
                     payload = json.loads(message.body.decode())
                     logger.info(f"Seller message received: {payload}")
-
-                    msg_type = payload.get("type")
-                    if msg_type == "create-order":
+                    from_service = payload.get("from")
+                    if from_service != "catalog_service":
+                        raise Exception("Recieved Event from Unknown Service")
+                    event = payload.get("event")
+                    logger.info(f"{event=}")
+                    if event == "create-order":
                         await SellerService.update_seller(payload["seller_id"], payload["update-data"])
-                    elif msg_type == "approve-order":
+                    elif event == "approve-order":
                         await SellerService.update_seller(payload["seller_id"], payload["update-data"])
-                    elif msg_type == "update-catalog-count":
-                        await SellerService.update_seller(payload["seller_id"], payload["update-data"])
-                    elif msg_type == "cancel-order":
+                    elif event == "update-catalog-count":
+                        logger.info(f"{payload["update_data"]=}")
+                        await SellerService.update_total_catalogs(payload["update_data"]["seller_id"], payload["update_data"]["count"])
+                    elif event == "cancel-order":
                         await SellerService.update_seller(payload["seller_id"], payload["update-data"])
                 except Exception as e:
+                    import traceback
                     logger.error(
-                        f"Error processing seller message: {e}, body={message.body.decode()}")
+                        f"Error processing seller message: {e} {traceback.format_exc()}")
 
         await queue.consume(on_message)  # type: ignore
 
@@ -105,10 +108,8 @@ async def consume_review_fanout_messages(channel: AbstractRobustChannel | None =
         exchange_name = "msa-review"
         queue_name = "seller-review-queue"
 
-        # type: ignore
-        exchange = await channel.declare_exchange(exchange_name, ExchangeType.FANOUT)
-        # type: ignore
-        queue = await channel.declare_queue(queue_name, durable=True, auto_delete=False)
+        exchange = await channel.declare_exchange(exchange_name, ExchangeType.FANOUT) # type: ignore
+        queue = await channel.declare_queue(queue_name, durable=True, auto_delete=False) # type: ignore
         await queue.bind(exchange)
 
         async def on_message(message: IncomingMessage):

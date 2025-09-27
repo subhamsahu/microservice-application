@@ -16,14 +16,15 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 # Local imports
 from app.core.config import config as app_config
 from app.core.config import cors_settings
-from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME
+from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME, ELASTIC_SEARCH_INDEXES
 from app.core.exceptions import DatabaseInitializeError, ServerStartError
 from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
 from app.services.rabbitmq.connection import rabbitmq_manager
-from app.services.rabbitmq.consumer import consume_buyer_update_direct_message, consume_seller_update_direct_message
+from app.services.rabbitmq.consumer import consume_catalog_direct_message
 from app.services.elasticsearch import elasticsearch_service
+from app.services.redis import redis_service
 from app.core.middlewares import GatewayMiddleware
 from app.core.database import init_db, disconnect_db
 
@@ -86,6 +87,11 @@ class Server(metaclass=Singleton):
         return elasticsearch_service
     
     @property
+    def redis_service(self):
+        """Get the singleton Elasticsearch service."""
+        return redis_service
+    
+    @property
     def rabbitmq_manager(self):
         """Get the singleton RabbitMQ manager."""
         return rabbitmq_manager
@@ -104,6 +110,7 @@ class Server(metaclass=Singleton):
         # Close all singleton connections
         await disconnect_db()
         await self.elastic_service.close()
+        await self.redis_service.close()
         await self.rabbitmq_manager.close()
        
         self.logger.info("All connections closed successfully.")
@@ -174,15 +181,17 @@ class Server(metaclass=Singleton):
         if self.config.ENABLE_ES:
             self.logger.info("Checking Elasticsearch connection...")
             await self.elastic_service.initialize()
+            await self.elastic_service.create_index(ELASTIC_SEARCH_INDEXES.CATALOG)
             self.logger.info("Elasticsearch connection is healthy.")
+
+        await redis_service.connect()
 
     async def initialize_rabbitmq(self):
         """Initialize RabbitMQ connection."""
         self.logger.info("Initializing RabbitMQ connection...")
         try:
             await self.rabbitmq_manager.initialize()
-            await consume_buyer_update_direct_message()
-            await consume_seller_update_direct_message()
+            await consume_catalog_direct_message()
             self.logger.info("RabbitMQ connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"RabbitMQ initialization failed: {error}")

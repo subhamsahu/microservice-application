@@ -2,6 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
+from beanie import PydanticObjectId
 
 
 class LanguageSchema(BaseModel):
@@ -66,7 +67,7 @@ class SellerUpdate(BaseModel):
 
 class SellerResponse(BaseModel):
     """Seller response schema."""
-    id: str
+    id: PydanticObjectId = Field(alias="id")
     full_name: str
     username: str
     email: str
@@ -89,7 +90,10 @@ class SellerResponse(BaseModel):
     created_at: datetime
 
     class Config:
+        """Pydantic configuration."""
+        populate_by_name = True
         json_encoders = {
             ObjectId: str,
-            datetime: lambda dt: dt.isoformat() if dt else None
+            PydanticObjectId: str,
+            datetime: lambda dt: dt.isoformat()
         }

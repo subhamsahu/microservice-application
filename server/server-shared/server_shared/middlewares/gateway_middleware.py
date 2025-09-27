@@ -13,7 +13,7 @@ from ..error import NotAuthorizedError
 
 # List of valid token sources (e.g., different microservices)
 VALID_TOKEN_IDS: Set[str] = {
-    "auth", "seller", "gig", "search", "buyer", "message", "order", "review"
+    "auth", "seller", "catalog", "search", "buyer", "message", "order", "review"
 }
 
 # Replace with your actual JWT secret key

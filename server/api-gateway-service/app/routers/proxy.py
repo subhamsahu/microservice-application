@@ -57,6 +57,11 @@ async def proxy_handler(service: str, path: str, request: Request, http_method: 
             "base_url": f"{config.USERS_BASE_URL}/api/v1/seller",
             "public_routes": [
             ]
+        }, 
+        "catalog": {
+            "base_url": f"{config.CATALOG_BASE_URL}/api/v1/catalog",
+            "public_routes": [
+            ]
         }  
     }
 

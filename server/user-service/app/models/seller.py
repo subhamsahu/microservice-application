@@ -35,7 +35,7 @@ class Education(BaseModel):
 class Certificate(BaseModel):
     """Certificate model for seller."""
     name: str
-    from_org: str = Field(alias="from")
+    from_org: str
     year: int
 
 

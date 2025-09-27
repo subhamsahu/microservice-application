@@ -1,5 +1,6 @@
 """Services for seller operations."""
 
+import datetime
 import random
 from typing import Optional, List, Dict
 from fastapi import HTTPException, status
@@ -7,6 +8,7 @@ from app.models.seller import Seller, Language, Experience, Education
 from app.schemas.seller import SellerCreate, SellerUpdate
 from app.core.exceptions import DocumentNotFound, UserAlreadyExists
 from app.core.logger import logger
+from beanie import PydanticObjectId
 
 class SellerService:
     """Service class for seller operations."""
@@ -43,7 +45,7 @@ class SellerService:
         if existing_seller:
             raise UserAlreadyExists("Seller with the specified email already exists.")
         seller = Seller(**seller_data.model_dump(by_alias=True))
-        await seller.save()
+        await seller.insert()
         logger.info(f"Created new seller with ID: {seller.model_dump()}")
         return seller.model_dump()
 
@@ -61,7 +63,97 @@ class SellerService:
             setattr(seller, field, value)
 
         await seller.save()
+        logger.info(f"seller with id {seller_id} updated")
         return seller.model_dump()
+    
+    @staticmethod
+    async def update_total_catalogs(seller_id: str, count: int) -> None:
+        """Increment total_catalogs count."""
+        logger.info(f"Update data recieved for {seller_id} with {count}")
+        result = await Seller.find_one(Seller.id == PydanticObjectId(seller_id)).update(
+            {"$inc": {"total_catalogs": count}}
+        )
+        if result.modified_count == 0:
+            logger.warning(f"No seller updated for total_catalogs with ID {seller_id}")
+        else:
+            logger.info("seller info is updated")
+        
+
+    @staticmethod
+    async def update_ongoing_jobs(seller_id: str, ongoing_jobs: int) -> None:
+        """Increment ongoing_jobs."""
+        result = await Seller.find_one(Seller.id == PydanticObjectId(seller_id)).update(
+            {"$inc": {"ongoing_jobs": ongoing_jobs}}
+        )
+        if result.modified_count == 0:
+            logger.warning(f"No seller updated for ongoing_jobs with ID {seller_id}")
+
+    @staticmethod
+    async def update_cancelled_jobs(seller_id: str) -> None:
+        """Decrement ongoing_jobs and increment cancelled_jobs."""
+        result = await Seller.find_one(Seller.id == PydanticObjectId(seller_id)).update(
+            {"$inc": {"ongoing_jobs": -1, "cancelled_jobs": 1}}
+        )
+        if result.modified_count == 0:
+            logger.warning(f"No seller updated for cancelled_jobs with ID {seller_id}")
+
+    @staticmethod
+    async def update_completed_jobs(data: Dict) -> None:
+        """
+        Update completed jobs for a seller.
+        Expected data: {
+            "seller_id": str,
+            "ongoing_jobs": int,
+            "completed_jobs": int,
+            "total_earnings": float,
+            "recent_delivery": str (ISO datetime)
+        }
+        """
+        seller_id = data["seller_id"]
+        result = await Seller.find_one(Seller.id == PydanticObjectId(seller_id)).update(
+            {
+                "$inc": {
+                    "ongoing_jobs": data["ongoing_jobs"],
+                    "completed_jobs": data["completed_jobs"],
+                    "total_earnings": data["total_earnings"],
+                },
+                "$set": {"recent_delivery": datetime.fromisoformat(data["recent_delivery"])},
+            }
+        )
+        if result.modified_count == 0:
+            logger.warning(f"No seller updated for completed_jobs with ID {seller_id}")
+
+    @staticmethod
+    async def update_review(data: Dict) -> None:
+        """
+        Update review stats for a seller.
+        Expected data: {
+            "seller_id": str,
+            "rating": int (1-5)
+        }
+        """
+        rating_types = {
+            "1": "one",
+            "2": "two",
+            "3": "three",
+            "4": "four",
+            "5": "five",
+        }
+        rating_key = rating_types[str(data["rating"])]
+        seller_id = data["seller_id"]
+
+        result = await Seller.find_one(Seller.id == PydanticObjectId(seller_id)).update(
+            {
+                "$inc": {
+                    "ratings_count": 1,
+                    "rating_sum": data["rating"],
+                    f"rating_categories.{rating_key}.value": data["rating"],
+                    f"rating_categories.{rating_key}.count": 1,
+                }
+            }
+        )
+        if result.modified_count == 0:
+            logger.warning(f"No seller updated for review with ID {seller_id}")
             
     @staticmethod
     async def seed_sellers(count: int) -> List[Dict]:
