@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Socket.IO Test Client</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; max-width:900px; margin:20px auto; padding:10px; }
+    header { display:flex; align-items:center; gap:12px; }
+    h1 { margin:0; font-size:20px; }
+    .row { display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; }
+    input, button, select { padding:8px; font-size:14px; }
+    button { cursor:pointer; }
+    #logs { white-space:pre-wrap; background:#111; color:#dff; padding:12px; height:240px; overflow:auto; border-radius:6px; }
+    .box { border:1px solid #ddd; padding:12px; border-radius:6px; margin:8px 0; }
+    label { font-size:13px; color:#444; }
+    ul { margin:8px 0; padding-left:20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Socket.IO Client — Gateway Test</h1>
+    <div id="status" style="margin-left:auto; font-weight:600;">Disconnected</div>
+  </header>
+
+  <div class="box">
+    <label>Server URL</label>
+    <div class="row">
+      <input id="serverUrl" type="text" value="http://localhost:4000" style="flex:1" />
+      <button id="btnConnect">Connect</button>
+      <button id="btnDisconnect" disabled>Disconnect</button>
+    </div>
+
+    <div class="row">
+      <label style="width:110px">Socket options</label>
+      <select id="transportSelect">
+        <option value="websocket">websocket (recommended)</option>
+        <option value="polling">polling</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="box">
+    <label>User actions</label>
+    <div class="row">
+      <input id="username" placeholder="username" />
+      <button id="btnLogin">Emit loggedInUsers (login)</button>
+      <button id="btnGetLogged">Emit getLoggedInUsers</button>
+      <button id="btnRemove">Emit removeLoggedInUser (logout)</button>
+    </div>
+
+    <div class="row">
+      <input id="category" placeholder="category (e.g. sports)" />
+      <button id="btnCategory">Emit category</button>
+    </div>
+  </div>
+
+  <div class="box">
+    <label>Events received</label>
+    <div style="display:flex; gap:16px;">
+      <div style="flex:1">
+        <strong>Online users</strong>
+        <ul id="onlineList"></ul>
+      </div>
+      <div style="flex:2">
+        <strong>Messages / Orders</strong>
+        <ul id="eventsList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="box">
+    <label>Debug logs</label>
+    <div id="logs">Logs will appear here...</div>
+  </div>
+
+  <!-- Socket.IO client -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="" crossorigin="anonymous"></script>
+  <script>
+    // === Configuration / state ===
+    const SERVER_URL_INPUT = document.getElementById('serverUrl');
+    const TRANSPORT_SELECT = document.getElementById('transportSelect');
+    const btnConnect = document.getElementById('btnConnect');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    const statusEl = document.getElementById('status');
+    const logsEl = document.getElementById('logs');
+
+    const usernameInput = document.getElementById('username');
+    const btnLogin = document.getElementById('btnLogin');
+    const btnGetLogged = document.getElementById('btnGetLogged');
+    const btnRemove = document.getElementById('btnRemove');
+    const categoryInput = document.getElementById('category');
+    const btnCategory = document.getElementById('btnCategory');
+
+    const onlineList = document.getElementById('onlineList');
+    const eventsList = document.getElementById('eventsList');
+
+    let socket = null;
+
+    function log(...args) {
+      const ts = new Date().toLocaleTimeString();
+      logsEl.textContent = `[${ts}] ` + args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ') + '\n' + logsEl.textContent;
+    }
+
+    function setStatus(s) {
+      statusEl.textContent = s;
+      if (s.toLowerCase().includes('connected')) {
+        statusEl.style.color = 'green';
+      } else {
+        statusEl.style.color = 'crimson';
+      }
+    }
+
+    function renderOnline(users) {
+      onlineList.innerHTML = '';
+      if (!users || users.length === 0) {
+        onlineList.innerHTML = '<li>(no users)</li>';
+        return;
+      }
+      users.forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u;
+        onlineList.appendChild(li);
+      });
+    }
+
+    function addEvent(text) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      eventsList.prepend(li);
+    }
+
+    // === Connect / Disconnect ===
+    btnConnect.addEventListener('click', async () => {
+      const serverUrl = SERVER_URL_INPUT.value.trim();
+      if (!serverUrl) return alert('Set server URL first (e.g. http://localhost:8000)');
+
+      // Build connection options
+      const transport = TRANSPORT_SELECT.value === 'websocket' ? ['websocket'] : undefined;
+
+      // Use the default socket.io path (/socket.io/) -- no need to append it manually.
+      // If your server uses a custom path, pass `path: '/yourpath'` here.
+      try {
+        log('Attempting connect to', serverUrl, 'transport=', transport);
+        socket = io(serverUrl, {
+          transports: transport,
+          // path: '/socket.io', // uncomment if you use custom path
+          reconnectionAttempts: 5,
+          timeout: 5000,
+        });
+
+        // Add listeners
+        socket.on('connect', () => {
+          setStatus('Connected');
+          btnDisconnect.disabled = false;
+          log('socket connected', socket.id);
+        });
+
+        socket.on('disconnect', (reason) => {
+          setStatus('Disconnected');
+          btnDisconnect.disabled = true;
+          log('socket disconnected', reason);
+        });
+
+        socket.on('connect_error', (err) => {
+          setStatus('Connect Error');
+          log('connect_error', err);
+        });
+
+        socket.on('online', (users) => {
+          log('online event received', users);
+          renderOnline(users);
+        });
+
+        socket.on('message received', (data) => {
+          log('message received', data);
+          addEvent('message received: ' + JSON.stringify(data));
+        });
+
+        socket.on('message updated', (data) => {
+          log('message updated', data);
+          addEvent('message updated: ' + JSON.stringify(data));
+        });
+
+        socket.on('order notification', (order, notification) => {
+          log('order notification', order, notification);
+          addEvent('order notification: ' + JSON.stringify({order, notification}));
+        });
+
+      } catch (err) {
+        log('Failed to connect:', err);
+      }
+    });
+
+    btnDisconnect.addEventListener('click', () => {
+      if (!socket) return;
+      log('disconnecting...');
+      socket.disconnect();
+      socket = null;
+      setStatus('Disconnected');
+      btnDisconnect.disabled = true;
+    });
+
+    // === Emit actions ===
+    btnLogin.addEventListener('click', () => {
+      const username = usernameInput.value.trim();
+      if (!username) return alert('Enter a username first');
+      if (!socket || !socket.connected) return alert('Socket not connected');
+      // emit "loggedInUsers" handler that your server handles
+      socket.emit('loggedInUsers', username);
+      log('emitted loggedInUsers', username);
+    });
+
+    btnGetLogged.addEventListener('click', () => {
+      if (!socket || !socket.connected) return alert('Socket not connected');
+      socket.emit('getLoggedInUsers');
+      log('emitted getLoggedInUsers');
+    });
+
+    btnRemove.addEventListener('click', () => {
+      const username = usernameInput.value.trim();
+      if (!username) return alert('Enter a username first');
+      if (!socket || !socket.connected) return alert('Socket not connected');
+      socket.emit('removeLoggedInUser', username);
+      log('emitted removeLoggedInUser', username);
+    });
+
+    btnCategory.addEventListener('click', () => {
+      const username = usernameInput.value.trim();
+      const category = categoryInput.value.trim();
+      if (!username || !category) return alert('Enter username and category');
+      if (!socket || !socket.connected) return alert('Socket not connected');
+      socket.emit('category', category, username);
+      log('emitted category', {category, username});
+    });
+
+    // Auto disconnect when tab is closed
+    window.addEventListener('beforeunload', () => {
+      if (socket) socket.disconnect();
+    });
+
+    // quick initial status
+    setStatus('Disconnected');
+    log('Client ready. Set server URL & press Connect.');
+  </script>
+</body>
+</html>

@@ -1,38 +1,47 @@
 """Main module for the Server."""
 
 # Standard library imports
-import logging
 from contextlib import asynccontextmanager
 from os import getpid
 from typing import AsyncGenerator, Union
+import warnings
 
 # Third-party imports
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from socketio import AsyncServer, ASGIApp
+from socketio import AsyncServer, AsyncClient, ASGIApp
 
 # Local imports
 from app.core.config import config as app_config
 from app.core.config import cors_settings
-from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME
-from app.core.exceptions import AppException, DatabaseInitializeError, ServerStartError
+from app.core.constants import API_PREFIX, PROJECT_NAME, SERVICE_NAME, ELASTIC_SEARCH_INDEXES
+from app.core.exceptions import DatabaseInitializeError, ServerStartError
 from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
+from app.services.rabbitmq.connection import rabbitmq_manager
+from app.services.rabbitmq.consumer import consume_chat_direct_message
 from app.services.elasticsearch import elasticsearch_service
+from app.services.redis import redis_service
+from app.core.middlewares import GatewayMiddleware
+from app.core.database import init_db, disconnect_db
+from app.sockets.connection import sio
 from app.sockets.socket_handler import SocketHandler
 
 # Private imports
 from server_shared.utils.formatters import display_dotted_string
 from server_shared.utils.meta_classes import Singleton
 from server_shared.middlewares.security_middleware import PreventHPPMiddleware, SecureHeadersMiddleware
-# from server_shared.middlewares.rate_limiter import init_rate_limiter, rate_limit_middleware
 from server_shared.middlewares.core_middlewares import BodySizeLimiterMiddleware
+
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message="Duplicate Operation ID"
+)  # Need to Fix this duplicate warning
 
 
 @asynccontextmanager
@@ -73,33 +82,42 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
-        self.sio = None  # type: ignore
-        self.socket_app = None  # type: ignore
-        self.socket_handler = None  # type: ignore
+        self.sio = None
+        self.socket_app = None
         # Use singleton instances - no need to create new ones
 
     @property
     def elastic_service(self):
         """Get the singleton Elasticsearch service."""
         return elasticsearch_service
+    
+    @property
+    def redis_service(self):
+        """Get the singleton Elasticsearch service."""
+        return redis_service
+    
+    @property
+    def rabbitmq_manager(self):
+        """Get the singleton RabbitMQ manager."""
+        return rabbitmq_manager
 
     async def preprocessing(self):
         """Preprocessing tasks before the server starts."""
         self.logger.info(f"{self.service_name} is starting...")
         await self.initialize_database()
-         # Connect downstream services for Socket.IO if needed
-        if self.sio and hasattr(self, 'socket_handler'):
-            await self.socket_handler.connect_downstream_services()
-    
+        await self.initialize_rabbitmq()
         self.logger.info("Preprocessing completed.")
 
     async def postprocessing(self):
         """Postprocessing tasks after the server stops."""
         self.logger.info(f"{self.service_name} is stopping...")
-
+       
         # Close all singleton connections
+        await disconnect_db()
         await self.elastic_service.close()
-
+        await self.redis_service.close()
+        await self.rabbitmq_manager.close()
+       
         self.logger.info("All connections closed successfully.")
         self.logger.info("Postprocessing completed.")
 
@@ -110,9 +128,10 @@ class Server(metaclass=Singleton):
 
     def initialize_security_middleware(self):
         """Configures security middleware."""
+        self.logger.info("Initializing security middleware...")
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=[self.config.CLIENT_URL],
+            allow_origins=[self.config.API_GATEWAY_URL],
             allow_credentials=cors_settings.ALLOWED_CREDENTIALS,
             allow_methods=cors_settings.ALLOWED_METHODS,
             allow_headers=cors_settings.ALLOWED_HEADERS,
@@ -139,9 +158,9 @@ class Server(metaclass=Singleton):
         """
         # Compression
         self.app.add_middleware(GZipMiddleware, minimum_size=1000)
-        self.app.add_middleware(BodySizeLimiterMiddleware, max_body_size=200 * 1024 * 1024)
-
-
+        self.app.add_middleware(BodySizeLimiterMiddleware,
+                                max_body_size=200 * 1024 * 1024)
+        self.app.add_middleware(GatewayMiddleware)
 
     def initialize_error_handlers(self):
         """Configures error handling."""
@@ -150,11 +169,14 @@ class Server(metaclass=Singleton):
     def initialize_routes(self):
         """Defines application routes."""
         self.app.include_router(router=app_router, prefix=API_PREFIX)
+        # for route in self.app.routes:
+        #     print(f"{route.name}: {route.path}")
 
     async def initialize_database(self):
         """Initialize the application database connection."""
         self.logger.info("Initializing database connection...")
         try:
+            await init_db()
             self.logger.info("Database connection initialized successfully.")
         except Exception as error:
             self.logger.error(f"Database initialization failed: {error}")
@@ -164,33 +186,33 @@ class Server(metaclass=Singleton):
         if self.config.ENABLE_ES:
             self.logger.info("Checking Elasticsearch connection...")
             await self.elastic_service.initialize()
+            await self.elastic_service.create_index(ELASTIC_SEARCH_INDEXES.CHAT)
             self.logger.info("Elasticsearch connection is healthy.")
+
+        await redis_service.connect()
 
     def initialize_socket_io(self):
         self.logger.info("Initializing Socket.IO server...")
-        self.sio = AsyncServer(
-            async_mode='asgi',
-            cors_allowed_origins=["*"],  # Changed from string to list
-            cors_credentials=True,
-            logger=True,
-            engineio_logger=True,
-            ping_timeout=60,
-            ping_interval=25
-        )
-        self.socket_handler = SocketHandler(self.sio)
-        self.socket_handler.register_events()
-        # Note: Removed await since this should be sync
-        # If you need async operations here, move them to preprocessing()
+        self.sio = sio
+        socket_handler = SocketHandler(self.sio)
+        socket_handler.register_events()
         self.socket_app = ASGIApp(self.sio, self.app)
 
-        # 2nd Way Create separate Socket.IO ASGI app and mount it
-        # socket_asgi_app = ASGIApp(self.sio)
-        # self.app.mount("/socket.io", socket_asgi_app)
-        # self.socket_app = None  # Don't wrap the entire app
+    async def initialize_rabbitmq(self):
+        """Initialize RabbitMQ connection."""
+        self.logger.info("Initializing RabbitMQ connection...")
+        try:
+            await self.rabbitmq_manager.initialize()
+            await consume_chat_direct_message()
+            self.logger.info("RabbitMQ connection initialized successfully.")
+        except Exception as error:
+            self.logger.error(f"RabbitMQ initialization failed: {error}")
+            raise ServerStartError(
+                "Failed to initialize RabbitMQ connection.") from error
 
     def initialize_server(self):
         """Initializes and starts the server."""
-        self.initialize_socket_io()  # Initialize Socket.IO before middleware
+        self.initialize_socket_io()
         self.initialize_security_middleware()
         self.initialize_application_middleware()
         self.initialize_error_handlers()
@@ -202,7 +224,7 @@ class Server(metaclass=Singleton):
             self.initialize_server()
             self.logger.info(
                 f"{self.service_name} has started with process id {getpid()}")
-            display_dotted_string(f"{self.service_name}  started") 
+            display_dotted_string(f"{self.service_name}  started")
             return self.socket_app if self.socket_app else self.app
         except ServerStartError as error:
             self.logger.error(

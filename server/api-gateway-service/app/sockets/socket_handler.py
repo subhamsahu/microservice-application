@@ -15,7 +15,7 @@ class SocketHandler:
 
     def register_events(self):
         self.__register_gateway_events()
-        self.connect_downstream_services()
+        self._chat_service_io_connections()
 
     def __register_gateway_events(self):
         @self.sio.event
@@ -139,14 +139,14 @@ class SocketHandler:
         """Connect to downstream services with error handling"""
         try:
             logger.info("Attempting to connect to chat service...")
-            await self.chat_client.connect(config.MESSAGE_BASE_URL)
+            await self.chat_client.connect(config.MESSAGE_BASE_URL, retry=False)
             logger.info("Successfully connected to chat service")
         except Exception as e:
             logger.warning(f"Failed to connect to chat service at {config.MESSAGE_BASE_URL}: {e}")
             
         try:
             logger.info("Attempting to connect to order service...")
-            await self.order_client.connect(config.ORDER_BASE_URL)
+            await self.order_client.connect(config.ORDER_BASE_URL, retry=False)
             logger.info("Successfully connected to order service")
         except Exception as e:
             logger.warning(f"Failed to connect to order service at {config.ORDER_BASE_URL}: {e}")
