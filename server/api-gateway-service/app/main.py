@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from socketio import AsyncServer, ASGIApp
 
 # Local imports
 from app.core.config import config as app_config
@@ -24,6 +25,7 @@ from app.core.error_handler import register_all_errors
 from app.routers import app_router
 from app.core.logger import logger
 from app.services.elasticsearch import elasticsearch_service
+from app.sockets.socket_handler import SocketHandler
 
 # Private imports
 from server_shared.utils.formatters import display_dotted_string
@@ -71,6 +73,8 @@ class Server(metaclass=Singleton):
             lifespan=lifespan,
         )
         self.logger = logger
+        self.sio = None  # type: ignore
+        self.socket_app = None  # type: ignore
         # Use singleton instances - no need to create new ones
 
     @property
@@ -87,10 +91,10 @@ class Server(metaclass=Singleton):
     async def postprocessing(self):
         """Postprocessing tasks after the server stops."""
         self.logger.info(f"{self.service_name} is stopping...")
-        
+
         # Close all singleton connections
         await self.elastic_service.close()
-        
+
         self.logger.info("All connections closed successfully.")
         self.logger.info("Postprocessing completed.")
 
@@ -132,9 +136,7 @@ class Server(metaclass=Singleton):
         self.app.add_middleware(GZipMiddleware, minimum_size=1000)
         self.app.add_middleware(BodySizeLimiterMiddleware, max_body_size=200 * 1024 * 1024)
 
-        # Add global rate limiting middleware
-        # init_rate_limiter(self.app)
-        # self.app.middleware("http")(rate_limit_middleware())
+
 
     def initialize_error_handlers(self):
         """Configures error handling."""
@@ -159,8 +161,24 @@ class Server(metaclass=Singleton):
             await self.elastic_service.initialize()
             self.logger.info("Elasticsearch connection is healthy.")
 
+    def initialize_socket_io(self):
+        self.logger.info("Initializing Socket.IO server...")
+        self.sio = AsyncServer(
+            async_mode='asgi',
+            cors_allowed_origins=["*"],  # Changed from string to list
+            cors_credentials=True,
+            logger=True,
+            engineio_logger=True,
+            ping_timeout=60,
+            ping_interval=25
+        )
+        socket_handler = SocketHandler(self.sio)
+        socket_handler.register_events()
+        self.socket_app = ASGIApp(self.sio, self.app)
+
     def initialize_server(self):
         """Initializes and starts the server."""
+        self.initialize_socket_io()
         self.initialize_security_middleware()
         self.initialize_application_middleware()
         self.initialize_error_handlers()
@@ -172,11 +190,12 @@ class Server(metaclass=Singleton):
             self.initialize_server()
             self.logger.info(
                 f"{self.service_name} has started with process id {getpid()}")
-            display_dotted_string(f"{self.service_name}  started")
-            return self.app
+            display_dotted_string(f"{self.service_name}  started") 
+            return self.socket_app if self.socket_app else self.app
         except ServerStartError as error:
             self.logger.error(
                 f"{self.service_name} start_server() error method: {error}")
             return None
+
 
 server: Server = Server().start_server()  # type: ignore

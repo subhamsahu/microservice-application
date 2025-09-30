@@ -16,6 +16,8 @@ server-shared = {path = "../server-shared"}
 aio-pika = "^9.5.5"
 aiosmtplib = "^4.0.1"
 elasticsearch = "^8.10.1"
+redis = "^6.4.0"
+python-socketio = "^5.11.0"
 
 [tool.poetry.group.dev.dependencies]
 typer = "^0.16.0"

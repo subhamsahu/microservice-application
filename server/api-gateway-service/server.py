@@ -31,7 +31,7 @@ app: FastAPI = application.initialize()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:server",  # Replace with the actual module path
+    uvicorn.run("server:app",  # Replace with the actual module path
                 host=app_config.SERVER_IP,
                 port=app_config.SERVER_PORT,
                 reload=True)
