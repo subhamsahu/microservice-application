@@ -34,7 +34,8 @@ class RedisService(metaclass=Singleton):
                 decode_responses=decode_responses,
                 max_connections=20,
             )
-            logger.info(f"Connected to Redis at {url or self.url}")
+            await self._client.ping()
+            logger.info(f"Connected to Redis at  {self._client} {url or self.url}")
         return self._client
 
     async def close(self):
@@ -52,7 +53,7 @@ class RedisService(metaclass=Singleton):
         """
         if not self._client:
             await self.connect()
-            
+
         try:
             serialized_value = json.dumps(value) if not isinstance(value, str) else value
             await self._client.set(key, serialized_value, ex=expire)
@@ -66,7 +67,7 @@ class RedisService(metaclass=Singleton):
         """
         if not self._client:
             await self.connect()
-            
+
         try:
             value = await self._client.get(key)
             if value:
@@ -85,7 +86,7 @@ class RedisService(metaclass=Singleton):
         """
         if not self._client:
             await self.connect()
-            
+
         try:
             result = await self._client.delete(key)
             logger.debug(f"Deleted key '{key}' from Redis")
@@ -100,7 +101,7 @@ class RedisService(metaclass=Singleton):
         """
         if not self._client:
             await self.connect()
-            
+
         try:
             result = await self._client.exists(key)
             return bool(result)
@@ -114,7 +115,7 @@ class RedisService(metaclass=Singleton):
         """
         if not self._client:
             return False
-            
+
         try:
             await self._client.ping()
             return True

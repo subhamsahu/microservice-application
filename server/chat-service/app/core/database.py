@@ -21,6 +21,7 @@ async def init_db() -> AbstractAsyncDatabaseConnection:
     This function ensures that only one instance is created and reused.
     """
     global db
+    logger.info("Initializing database connection...")
     # Import models lazily to avoid import-time side-effects
 
     # Create or reuse the MongoDB connection singleton and register Beanie models

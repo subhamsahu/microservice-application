@@ -1,16 +1,19 @@
-# Users Service
 
-A FastAPI-based microservice for managing user profiles (buyers and sellers) using MongoDB.
+# Catalog Service
+
+A FastAPI-based microservice for managing seller catalogs (service/product listings) with advanced search and filtering, using MongoDB and Elasticsearch.
 
 ## Features
 
-- Buyer profile management
-- Seller profile management
-- MongoDB integration using Beanie ODM
-- RabbitMQ message queue integration
-- Elasticsearch integration
-- JWT authentication
-- Health checks
+- Catalog (listing) creation, update, delete
+- Advanced search with filters (query, price, delivery time, etc.)
+- Category and subcategory support
+- Tagging and rating system
+- MongoDB integration via Beanie ODM
+- Elasticsearch integration for fast search
+- RabbitMQ integration for messaging
+- JWT authentication for protected endpoints
+- Health check endpoint
 
 ## Setup
 
@@ -26,24 +29,31 @@ poetry install
 poetry run python server.py
 ```
 
+
 ## API Endpoints
 
 ### Health
-- `GET /` - Health check
+- `GET /health` — Service and dependency health check
 
-### Buyer Routes
-- `GET /api/v1/buyer/email` - Get buyer by email
-- `GET /api/v1/buyer/username` - Get current user's buyer profile
-- `GET /api/v1/buyer/username/{username}` - Get buyer by username
-- `PUT /api/v1/buyer/{buyerId}` - Update buyer profile
+### Catalog Endpoints
+- `POST /create` — Create a new catalog (listing)
+- `GET /search` — Search catalogs (query, price, delivery_time, etc.)
+- `GET /search/category` — Search catalogs by category
+- `GET /search/more_like/{category_id}` — Get similar catalogs
+- `GET /{catalog_id}` — Get catalog by ID
+- `PUT /{catalog_id}` — Update catalog by ID
+- `DELETE /{catalog_id}` — Delete catalog by ID
 
-### Seller Routes
-- `GET /api/v1/seller/id/{sellerId}` - Get seller by ID
-- `GET /api/v1/seller/username/{username}` - Get seller by username
-- `PUT /api/v1/seller/{sellerId}` - Update seller profile
-- `POST /api/v1/seller/create/{sellerId}` - Create seller profile
-- `POST /api/v1/seller/seed/{count}` - Seed random sellers
+All endpoints (except health/search) require authentication.
 
 ## Database
 
-Uses MongoDB with Beanie ODM for document modeling and async operations.
+Uses MongoDB (Beanie ODM) for storing catalog listings. Each catalog includes:
+- Seller ID
+- Title, description, basic info
+- Categories, subcategories, tags
+- Price, cover image, expected delivery
+- Ratings (with breakdown)
+- Timestamps
+
+Elasticsearch is used for fast, flexible search and filtering.

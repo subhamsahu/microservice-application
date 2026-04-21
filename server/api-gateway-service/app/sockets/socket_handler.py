@@ -103,10 +103,12 @@ class SocketHandler:
         # Relay events
         @self.chat_client.on("message received")
         async def message_received(data):
+            logger.info(f"Relaying message received: {data}")
             await self.sio.emit("message received", data)
 
         @self.chat_client.on("message updated")
         async def message_updated(data):
+            logger.info(f"Relaying message updated: {data}")
             await self.sio.emit("message updated", data)
 
     # -----------------------

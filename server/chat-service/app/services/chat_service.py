@@ -16,8 +16,9 @@ from app.sockets.connection import sio
 
 class MessageDetails:
     """Data class for email message details"""
-    def __init__(self, sender: str, amount: str, buyer_username: str, 
-                 seller_username: str, title: str, description: str, 
+
+    def __init__(self, sender: str, amount: str, buyer_username: str,
+                 seller_username: str, title: str, description: str,
                  delivery_days: str, template: str):
         self.sender = sender
         self.amount = amount
@@ -27,7 +28,7 @@ class MessageDetails:
         self.description = description
         self.delivery_days = delivery_days
         self.template = template
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "sender": self.sender,
@@ -43,6 +44,13 @@ class MessageDetails:
 
 class ChatService:
     """Service class for chat operations"""
+
+    @staticmethod
+    async def create_conversation(data: Dict[str, Any]) -> Conversation:
+        """Create a new conversation between two users"""
+        conversation = Conversation(**data)
+        await conversation.create()
+        return conversation
 
     @staticmethod
     async def add_message(data: MessageSchema) -> Message:
@@ -69,7 +77,7 @@ class ChatService:
             "has_offer": getattr(data, 'has_offer', False),
             "created_at": datetime.utcnow()
         }
-        
+
         # Add offer if present
         if hasattr(data, 'offer') and data.offer:
             offer_data = {
@@ -84,36 +92,37 @@ class ChatService:
             }
             offer = Offer(**offer_data)
             message_data["offer"] = offer
-        
+
         # Create the message in database
         message = Message(**message_data)
         await message.create()
-        
+
         logger.info(f"Message created successfully with ID: {message.id}")
-        
+
         # Handle offer email notification
         if getattr(data, 'has_offer', False) and hasattr(data, 'offer') and data.offer:
-                email_details = MessageDetails(
-                    sender=data.sender_username,
-                    amount=str(getattr(data.offer, 'price', 0)),
-                    buyer_username=data.receiver_username.lower(),
-                    seller_username=data.sender_username.lower(),
-                    title=getattr(data.offer, 'catalog_title', ''),
-                    description=getattr(data.offer, 'description', ''),
-                    delivery_days=str(getattr(data.offer, 'delivery_in_days', 0)),
-                    template='offer'
-                )
-                
-                # Send email notification via RabbitMQ
-                channel = await create_rabbitmq_channel()
-                await publish_message_to_queue(
-                    channel=channel,
-                    exchange_name="jobber-order-notification",
-                    routing_key="order-email",
-                    message=email_details.to_dict()
-                )
-                logger.info("Order email notification sent to notification service.")
-        
+            email_details = MessageDetails(
+                sender=data.sender_username,
+                amount=str(getattr(data.offer, 'price', 0)),
+                buyer_username=data.receiver_username.lower(),
+                seller_username=data.sender_username.lower(),
+                title=getattr(data.offer, 'catalog_title', ''),
+                description=getattr(data.offer, 'description', ''),
+                delivery_days=str(getattr(data.offer, 'delivery_in_days', 0)),
+                template='offer'
+            )
+
+            # Send email notification via RabbitMQ
+            channel = await create_rabbitmq_channel()
+            await publish_message_to_queue(
+                channel=channel,
+                exchange_name="jobber-order-notification",
+                routing_key="order-email",
+                message=email_details.to_dict()
+            )
+            logger.info(
+                "Order email notification sent to notification service.")
+
         # Emit socket message
         # Convert message to dict for socket emission
         message_dict = {
@@ -135,7 +144,7 @@ class ChatService:
             "has_offer": message.has_offer,
             "created_at": message.created_at.isoformat()
         }
-        
+
         if message.offer:
             message_dict["offer"] = {
                 "catalog_title": message.offer.catalog_title,
@@ -147,7 +156,7 @@ class ChatService:
                 "accepted": message.offer.accepted,
                 "cancelled": message.offer.cancelled
             }
-        
+
         await sio.emit('message received', message_dict)
         logger.info("Socket message emitted successfully")
         return message
@@ -163,25 +172,60 @@ class ChatService:
         conversation = await Conversation.find_one(
             {
                 "$or": [
-                    {"sender_username": sender_username, "receiver_username": receiver_username},
-                    {"sender_username": receiver_username, "receiver_username": sender_username}
+                    {"sender_username": sender_username,
+                        "receiver_username": receiver_username},
+                    {"sender_username": receiver_username,
+                        "receiver_username": sender_username}
                 ]
             }
         )
         return conversation
 
     @staticmethod
-    async def get_user_conversations(username: str) -> List[Conversation]:
+    async def get_user_conversation_list(username: str) -> List[Conversation]:
         """Get all conversations for a specific user"""
-        conversations = await Conversation.find(
+        pipeline = [
             {
-                "$or": [
-                    {"sender_username": username},
-                    {"receiver_username": username}
-                ]
+                "$match": {
+                    "$or": [
+                        {"sender_username": username},
+                        {"receiver_username": username}
+                    ]
+                }
+            },
+            {"$sort": {"created_at": -1}},  # sort newest first
+            {
+                "$group": { # group by conversation_id
+                    "_id": "$conversation_id",
+                    # pick the latest message
+                    "result": {"$first": "$$ROOT"}
+                }
+            },
+            {
+                "$replaceRoot": {"newRoot": "$result"} # flatten the document
+            },
+            {
+                "$project": { # which fields to include
+                    "_id": 1,
+                    "conversation_id": 1,
+                    "seller_id": 1,
+                    "buyer_id": 1,
+                    "receiver_username": 1,
+                    "receiver_picture": 1,
+                    "sender_username": 1,
+                    "sender_picture": 1,
+                    "body": 1,
+                    "file": 1,
+                    "gig_id": 1,
+                    "is_read": 1,
+                    "has_offer": 1,
+                    "created_at": 1
+                }
             }
-        ).to_list()
-        return conversations
+        ]
+
+        results = await Message.aggregate(pipeline).to_list()
+        return results
 
     @staticmethod
     async def get_messages_between_users(sender_username: str, receiver_username: str) -> List[Message]:
@@ -189,8 +233,10 @@ class ChatService:
         messages = await Message.find(
             {
                 "$or": [
-                    {"sender_username": sender_username, "receiver_username": receiver_username},
-                    {"sender_username": receiver_username, "receiver_username": sender_username}
+                    {"sender_username": sender_username,
+                        "receiver_username": receiver_username},
+                    {"sender_username": receiver_username,
+                        "receiver_username": sender_username}
                 ]
             }
         ).sort("created_at").to_list()
@@ -210,17 +256,17 @@ class ChatService:
         message_id = offer_data.get("message_id")
         if not message_id:
             raise ValueError("Message ID is required")
-        
+
         message = await Message.get(message_id)
         if not message:
             raise MessageNotFound(f"Message with ID {message_id} not found")
-        
+
         # Update offer fields
         if message.offer:
             for key, value in offer_data.items():
                 if hasattr(message.offer, key):
                     setattr(message.offer, key, value)
-        
+
         await message.save()
         return message
 
@@ -230,11 +276,11 @@ class ChatService:
         message_id = message_data.get("message_id")
         if not message_id:
             raise ValueError("Message ID is required")
-        
+
         message = await Message.get(message_id)
         if not message:
             raise MessageNotFound(f"Message with ID {message_id} not found")
-        
+
         message.is_read = True
         await message.save()
         return True
@@ -245,25 +291,10 @@ class ChatService:
         message_ids = messages_data.get("message_ids", [])
         if not message_ids:
             raise ValueError("Message IDs are required")
-        
+
         # Update multiple messages
         await Message.find(
             {"_id": {"$in": message_ids}}
         ).update({"$set": {"is_read": True}})
-        
+
         return True
-
-    @staticmethod
-    async def get_messages(room_id: str, limit: int = 50, offset: int = 0) -> List:
-        """Retrieve messages from a chat room with pagination"""
-        messages = await Message.find(
-            {"conversation_id": room_id}
-        ).sort("created_at").skip(offset).limit(limit).to_list()
-        return messages
-
-    @staticmethod
-    async def handle_notification(message_data: dict) -> None:
-        """Handle chat notification from RabbitMQ"""
-        logger.info(f"Processing chat notification: {message_data}")
-        # Add custom notification handling logic here
-        # This could include sending WebSocket notifications, email alerts, etc.
